@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <camera/CameraParameters.h>
+#include <camera/CameraParametersExtra.h>
 #include <system/graphics.h>
 
 namespace android {
@@ -173,6 +174,10 @@ const char CameraParameters::FOCUS_MODE_CONTINUOUS_PICTURE[] = "continuous-pictu
 // Values for light fx settings
 const char CameraParameters::LIGHTFX_LOWLIGHT[] = "low-light";
 const char CameraParameters::LIGHTFX_HDR[] = "high-dynamic-range";
+
+#ifdef CAMERA_PARAMETERS_EXTRA_C
+CAMERA_PARAMETERS_EXTRA_C
+#endif
 
 CameraParameters::CameraParameters()
                 : mMap()

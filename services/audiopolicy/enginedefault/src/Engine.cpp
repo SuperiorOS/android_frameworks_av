@@ -269,6 +269,10 @@ DeviceVector Engine::getDevicesForStrategyInt(legacy_strategy strategy,
     case STRATEGY_PHONE: {
         devices = availableOutputDevices.getDevicesFromType(AUDIO_DEVICE_OUT_HEARING_AID);
         if (!devices.isEmpty()) break;
+        if (getDpConnAndAllowedForVoice() && isInCall()) {
+            devices = availableOutputDevices.getDevicesFromType(AUDIO_DEVICE_OUT_AUX_DIGITAL);
+            if (!devices.isEmpty()) break;
+        }
         devices = availableOutputDevices.getFirstDevicesFromTypes(
                                           getLastRemovableMediaDevices());
         if (!devices.isEmpty()) break;
@@ -319,6 +323,16 @@ DeviceVector Engine::getDevicesForStrategyInt(legacy_strategy strategy,
                     break;
                 }
             }
+        }
+        // if display-port is connected and being used in voice usecase,
+        // play ringtone over speaker and display-port
+        if ((strategy == STRATEGY_SONIFICATION) && getDpConnAndAllowedForVoice()) {
+             DeviceVector devices2 = availableOutputDevices.getDevicesFromType(
+                 AUDIO_DEVICE_OUT_AUX_DIGITAL);
+             if (!devices2.isEmpty()) {
+               devices.add(devices2);
+               break;
+             }
         }
         // The second device used for sonification is the same as the device used by media strategy
         FALLTHROUGH_INTENDED;

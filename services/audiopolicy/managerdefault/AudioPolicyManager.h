@@ -586,7 +586,7 @@ protected:
          * Must be called before updateDevicesAndOutputs()
          * @param attr to be considered
          */
-        void checkOutputForAttributes(const audio_attributes_t &attr);
+        virtual void checkOutputForAttributes(const audio_attributes_t &attr);
 
         /**
          * @brief checkAudioSourceForAttributes checks if any AudioSource following the same routing

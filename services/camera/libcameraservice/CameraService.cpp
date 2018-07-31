@@ -2263,6 +2263,22 @@ void CameraService::loadSoundLocked(sound_kind kind) {
     }
 }
 
+void CameraService::ensureCameraShutterSoundDisabled() {
+    char value[PROPERTY_VALUE_MAX];
+    if (property_get("camera.shutter_sound.blacklist", value, NULL) > 0){
+        std::stringstream disable_shutter_package_list(value);
+        std::string package;
+        while(std::getline(disable_shutter_package_list, package, ',')){
+            if (package.compare(String8(mClientPackageName)) == 0){
+                mSoundPlayer[SOUND_SHUTTER] = NULL;
+                mSoundPlayer[SOUND_RECORDING_START] = NULL;
+                mSoundPlayer[SOUND_RECORDING_STOP] = NULL;
+                return;
+            }
+        }
+    }
+}
+
 void CameraService::decreaseSoundRef() {
     Mutex::Autolock lock(mSoundLock);
     LOG1("CameraService::decreaseSoundRef ref=%d", mSoundRef);
@@ -2282,6 +2298,7 @@ void CameraService::playSound(sound_kind kind) {
     LOG1("playSound(%d)", kind);
     Mutex::Autolock lock(mSoundLock);
     loadSoundLocked(kind);
+    ensureCameraShutterSoundDisabled();
     sp<MediaPlayer> player = mSoundPlayer[kind];
     if (player != 0) {
         player->seekTo(0);
@@ -2311,6 +2328,7 @@ CameraService::Client::Client(const sp<CameraService>& cameraService,
 
     mRemoteCallback = cameraClient;
 
+    cameraService->mClientPackageName = clientPackageName;
     cameraService->increaseSoundRef();
 
     LOG1("Client::Client X (pid %d, id %d)", callingPid, mCameraId);

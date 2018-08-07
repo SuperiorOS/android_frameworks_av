@@ -21,7 +21,8 @@ cc_library_shared {
     defaults: [
         "no_cameraserver_defaults",
         "qti_camera_device_defaults",
-        "needs_camera_boottime" ,
+        "needs_camera_boottime",
+        "target_camera_needs_client_info_defaults",
     ],
 
     // Camera service source
@@ -163,6 +164,5 @@ cc_library_shared {
         "-Werror",
         "-Wno-ignored-qualifiers",
     ],
-
 }
 

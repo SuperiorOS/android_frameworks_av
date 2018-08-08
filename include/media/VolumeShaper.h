@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2017 The Android Open Source Project
  *
@@ -135,6 +136,7 @@ public:
         explicit Configuration(const Configuration &configuration)
             : Interpolator<S, T>(*static_cast<const Interpolator<S, T> *>(&configuration))
             , RefBase()
+            , Parcelable()
             , mType(configuration.mType)
             , mId(configuration.mId)
             , mOptionFlags(configuration.mOptionFlags)

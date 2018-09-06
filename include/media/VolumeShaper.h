@@ -127,6 +127,7 @@ public:
         Configuration()
             : Interpolator<S, T>()
             , RefBase()
+            , Parcelable()
             , mType(TYPE_SCALE)
             , mId(-1)
             , mOptionFlags(OPTION_FLAG_NONE)

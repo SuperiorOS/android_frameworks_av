@@ -132,6 +132,13 @@ cc_library_shared {
         "-Werror",
         "-Wno-ignored-qualifiers",
     ],
+    product_variables: {
+        pixys: {
+            needs_camera_boottime_timestamp: {
+                cflags: ["-DTARGET_CAMERA_BOOTTIME_TIMESTAMP"],
+            },
+        },
+    },
 
 }
 

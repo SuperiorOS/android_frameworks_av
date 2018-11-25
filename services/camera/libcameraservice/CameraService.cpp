@@ -912,6 +912,7 @@ Status CameraService::validateClientPermissionsLocked(const String8& cameraId,
                 clientName8.string(), clientUid, clientPid, cameraId.string());
     }
 
+#ifndef NO_CAMERA_SERVER
     // Make sure the UID is in an active state to use the camera
     if (!mUidPolicy->isUidActive(callingUid, String16(clientName8))) {
         ALOGE("Access Denial: can't use the camera from an idle UID pid=%d, uid=%d",
@@ -920,6 +921,7 @@ Status CameraService::validateClientPermissionsLocked(const String8& cameraId,
                 "Caller \"%s\" (PID %d, UID %d) cannot open camera \"%s\" from background",
                 clientName8.string(), clientUid, clientPid, cameraId.string());
     }
+#endif
 
     // Only use passed in clientPid to check permission. Use calling PID as the client PID that's
     // connected to camera service directly.

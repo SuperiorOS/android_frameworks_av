@@ -171,6 +171,14 @@ status_t CameraMetadata::sort() {
 
 status_t CameraMetadata::checkType(uint32_t tag, uint8_t expectedType) {
     int tagType = get_local_camera_metadata_tag_type(tag, mBuffer);
+    if (tag == ((uint32_t) -2146172928)) {
+        ALOGE("[IGNORING] Mismatched tag type when updating entry %s (%d) of type %s; "
+                "got type %s data instead ",
+                get_local_camera_metadata_tag_name(tag, mBuffer), tag,
+                camera_metadata_type_names[tagType],
+                camera_metadata_type_names[expectedType]);
+        return OK;
+    }
     if ( CC_UNLIKELY(tagType == -1)) {
         ALOGE("Update metadata entry: Unknown tag %d", tag);
         return INVALID_OPERATION;

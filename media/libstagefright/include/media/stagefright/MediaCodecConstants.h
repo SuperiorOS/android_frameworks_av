@@ -63,9 +63,6 @@ constexpr int32_t AVCLevel42      = 0x2000;
 constexpr int32_t AVCLevel5       = 0x4000;
 constexpr int32_t AVCLevel51      = 0x8000;
 constexpr int32_t AVCLevel52      = 0x10000;
-constexpr int32_t AVCLevel6       = 0x20000;
-constexpr int32_t AVCLevel61      = 0x40000;
-constexpr int32_t AVCLevel62      = 0x80000;
 
 inline static const char *asString_AVCLevel(int32_t i, const char *def = "??") {
     switch (i) {

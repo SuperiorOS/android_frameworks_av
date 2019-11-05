@@ -3008,7 +3008,7 @@ status_t CameraService::BasicClient::startCameraOps() {
     sCameraService->updateOpenCloseStatus(mCameraIdStr, true/*open*/, mClientPackageName);
 
 #ifdef TARGET_NEEDS_CLIENT_INFO
-    std::ofstream cpf("/data/vendor/aosp/client_package_name");
+    std::ofstream cpf("/data/misc/aosp/client_package_name");
     std::string cpn = String8(mClientPackageName).string();
     cpf << cpn;
 #endif

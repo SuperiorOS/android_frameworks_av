@@ -206,30 +206,6 @@ AudioPolicyMixCollection::MixMatchStatus AudioPolicyMixCollection::mixMatch(
         const audio_config_base_t& config, uid_t uid) {
 
     if (mix->mMixType == MIX_TYPE_PLAYERS) {
-        // Loopback render mixes are created from a public API and thus restricted
-        // to non sensible audio that have not opted out.
-        if (is_mix_loopback_render(mix->mRouteFlags)) {
-            if (!(attributes.usage == AUDIO_USAGE_UNKNOWN ||
-                  attributes.usage == AUDIO_USAGE_MEDIA ||
-                  attributes.usage == AUDIO_USAGE_GAME ||
-                  attributes.usage == AUDIO_USAGE_VOICE_COMMUNICATION)) {
-                return MixMatchStatus::NO_MATCH;
-            }
-            auto hasFlag = [](auto flags, auto flag) { return (flags & flag) == flag; };
-            if (hasFlag(attributes.flags, AUDIO_FLAG_NO_SYSTEM_CAPTURE)) {
-                return MixMatchStatus::NO_MATCH;
-            }
-
-            if (attributes.usage == AUDIO_USAGE_VOICE_COMMUNICATION) {
-                if (!mix->mVoiceCommunicationCaptureAllowed) {
-                    return MixMatchStatus::NO_MATCH;
-                }
-            } else if (!mix->mAllowPrivilegedMediaPlaybackCapture &&
-                hasFlag(attributes.flags, AUDIO_FLAG_NO_MEDIA_PROJECTION)) {
-                return MixMatchStatus::NO_MATCH;
-            }
-        }
-
         // Permit match only if requested format and mix format are PCM and can be format
         // adapted by the mixer, or are the same (compressed) format.
         if (!is_mix_loopback(mix->mRouteFlags) &&

@@ -131,7 +131,8 @@ cc_library_shared {
         "android.hardware.camera.device@3.3",
         "android.hardware.camera.device@3.4",
         "android.hardware.camera.device@3.5",
-        "android.hardware.camera.device@3.6"
+        "android.hardware.camera.device@3.6",
+        "vendor.lineage.camera.motor@1.0"
     ],
 
     static_libs: [

@@ -41,10 +41,6 @@ namespace android {
 
 using media::VolumeShaper;
 
-MediaPlayer::MediaPlayer() : MediaPlayer("" /*opPackageName*/)
-{
-}
-
 MediaPlayer::MediaPlayer(const std::string opPackageName) : mOpPackageName(opPackageName)
 {
     ALOGV("constructor");

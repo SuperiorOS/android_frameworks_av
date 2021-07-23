@@ -201,6 +201,8 @@ interface IAudioPolicyService {
     boolean isDirectOutputSupported(in AudioConfigBase config,
                                     in AudioAttributesInternal attributes);
 
+    void setPolicyManagerParameters(int key, int value);
+
     /**
      * List available audio ports and their attributes. Returns the generation.
      *

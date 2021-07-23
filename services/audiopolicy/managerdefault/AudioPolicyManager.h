@@ -781,14 +781,8 @@ protected:
 
         audio_io_handle_t selectOutputForMusicEffects();
 
-        virtual status_t addAudioPatch(audio_patch_handle_t handle, const sp<AudioPatch>& patch)
-        {
-            return mAudioPatches.addAudioPatch(handle, patch);
-        }
-        virtual status_t removeAudioPatch(audio_patch_handle_t handle)
-        {
-            return mAudioPatches.removeAudioPatch(handle);
-        }
+        virtual status_t addAudioPatch(audio_patch_handle_t handle, const sp<AudioPatch>& patch);
+        virtual status_t removeAudioPatch(audio_patch_handle_t handle);
 
         bool isPrimaryModule(const sp<HwModule> &module) const
         {
@@ -1017,7 +1011,10 @@ private:
         sp<SourceClientDescriptor> startAudioSourceInternal(
                 const struct audio_port_config *source, const audio_attributes_t *attributes,
                 uid_t uid);
-
+        audio_port_handle_t mFmPortId;
+        bool mFMDirectAudioPatchEnable;
+        bool mSkipFMVolControl;
+        virtual status_t setPolicyManagerParameters(int key, int value);
         void onNewAudioModulesAvailableInt(DeviceVector *newDevices);
 
         // Add or remove AC3 DTS encodings based on user preferences.
@@ -1260,6 +1257,10 @@ private:
 
         // Filters only the relevant flags for getProfileForOutput
         audio_output_flags_t getRelevantFlags (audio_output_flags_t flags, bool directOnly);
+
+        bool isFMDirectMode(const sp<AudioPatch>& patch);
+        bool isFMActive(void);
+        bool isFMDirectActive(void);
 };
 
 };

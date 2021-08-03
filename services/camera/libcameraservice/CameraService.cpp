@@ -715,17 +715,7 @@ void CameraService::onTorchStatusChangedLocked(const String8& cameraId,
 }
 
 static bool hasPermissionsForSystemCamera(int callingPid, int callingUid) {
-    permission::PermissionChecker permissionChecker;
-    AttributionSourceState attributionSource{};
-    attributionSource.pid = callingPid;
-    attributionSource.uid = callingUid;
-    bool checkPermissionForSystemCamera = permissionChecker.checkPermissionForPreflight(
-            sSystemCameraPermission, attributionSource, String16(), AppOpsManager::OP_NONE)
-            != permission::PermissionChecker::PERMISSION_HARD_DENIED;
-    bool checkPermissionForCamera = permissionChecker.checkPermissionForPreflight(
-            sCameraPermission, attributionSource, String16(), AppOpsManager::OP_NONE)
-            != permission::PermissionChecker::PERMISSION_HARD_DENIED;
-    return checkPermissionForSystemCamera && checkPermissionForCamera;
+    return checkPermission(sCameraPermission, callingPid, callingUid);
 }
 
 Status CameraService::getNumberOfCameras(int32_t type, int32_t* numCameras) {

@@ -78,6 +78,10 @@
 #include "utils/CameraThreadState.h"
 #include "utils/CameraServiceProxyWrapper.h"
 
+#ifdef CAMERA_NEEDS_CLIENT_INFO_LIB
+#include <vendor/oneplus/hardware/camera/1.0/IOnePlusCameraProvider.h>
+#endif
+
 namespace {
     const char* kPermissionServiceName = "permission";
 }; // namespace anonymous
@@ -95,6 +99,9 @@ using hardware::camera2::ICameraInjectionCallback;
 using hardware::camera2::ICameraInjectionSession;
 using hardware::camera2::utils::CameraIdAndSessionConfiguration;
 using hardware::camera2::utils::ConcurrentCameraIdCombination;
+#ifdef CAMERA_NEEDS_CLIENT_INFO_LIB
+using ::vendor::oneplus::hardware::camera::V1_0::IOnePlusCameraProvider;
+#endif
 
 // ----------------------------------------------------------------------------
 // Logging support -- this is for debugging only
@@ -132,6 +139,9 @@ static const String16 sCameraOpenCloseListenerPermission(
 static const String16
         sCameraInjectExternalCameraPermission("android.permission.CAMERA_INJECT_EXTERNAL_CAMERA");
 const char *sFileName = "lastOpenSessionDumpFile";
+#ifdef CAMERA_NEEDS_CLIENT_INFO_LIB
+static const sp<IOnePlusCameraProvider> gVendorCameraProviderService = IOnePlusCameraProvider::getService();
+#endif
 static constexpr int32_t kSystemNativeClientScore = resource_policy::PERCEPTIBLE_APP_ADJ;
 static constexpr int32_t kSystemNativeClientState =
         ActivityManager::PROCESS_STATE_PERSISTENT_UI;
@@ -141,6 +151,9 @@ const String16 CameraService::kWatchAllClientsFlag("all");
 
 // Set to keep track of logged service error events.
 static std::set<String8> sServiceErrorEventSet;
+
+// Current camera package name
+static std::string sCurrPackageName;
 
 CameraService::CameraService() :
         mEventLog(DEFAULT_EVENT_LOG_LENGTH),
@@ -946,6 +959,10 @@ Status CameraService::filterGetInfoErrorCode(status_t err) {
                     "Camera HAL encountered error %d: %s",
                     err, strerror(-err));
     }
+}
+
+std::string CameraService::getCurrPackageName() {
+    return sCurrPackageName;
 }
 
 Status CameraService::makeClient(const sp<CameraService>& cameraService,
@@ -1833,6 +1850,8 @@ Status CameraService::connectHelper(const sp<CALLBACK>& cameraCb, const String8&
     ALOGI("CameraService::connect call (PID %d \"%s\", camera ID %s) and "
             "Camera API version %d", packagePid, clientName8.string(), cameraId.string(),
             static_cast<int>(effectiveApiLevel));
+
+    sCurrPackageName = clientName8.string();
 
     nsecs_t openTimeNs = systemTime();
 
@@ -3541,6 +3560,10 @@ status_t CameraService::BasicClient::startCameraOps() {
 
     // Notify listeners of camera open/close status
     sCameraService->updateOpenCloseStatus(mCameraIdStr, true/*open*/, mClientPackageName);
+
+#ifdef CAMERA_NEEDS_CLIENT_INFO_LIB
+    gVendorCameraProviderService->setPackageName(String8(mClientPackageName).string());
+#endif
 
     return OK;
 }

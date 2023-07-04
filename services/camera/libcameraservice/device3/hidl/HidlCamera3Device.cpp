@@ -29,6 +29,9 @@
 #define CLOGE(fmt, ...) ALOGE("Camera %s: %s: " fmt, mId.string(), __FUNCTION__, \
             ##__VA_ARGS__)
 
+#define CLOGW(fmt, ...) ALOGW("Camera %s: %s: " fmt, mId.string(), __FUNCTION__, \
+ ##__VA_ARGS__)
+
 // Convenience macros for transitioning to the error state
 #define SET_ERR(fmt, ...) setErrorState(   \
     "%s: " fmt, __FUNCTION__,              \
@@ -178,10 +181,19 @@ status_t HidlCamera3Device::initialize(sp<CameraProviderManager> manager,
             res = manager->getCameraCharacteristics(
                     physicalId, /*overrideForPerfClass*/false, &mPhysicalDeviceInfoMap[physicalId]);
             if (res != OK) {
-                SET_ERR_L("Could not retrieve camera %s characteristics: %s (%d)",
+                CLOGW("Could not retrieve camera %s characteristics: %s (%d)",
                         physicalId.c_str(), strerror(-res), res);
-                session->close();
-                return res;
+                // HACK for ginkgo - check camera id 20 for depth sensor
+                physicalId = "20";
+                CLOGW("Trying physical camera %s if available", physicalId.c_str());
+                res = manager->getCameraCharacteristics(
+                        physicalId, false, &mPhysicalDeviceInfoMap[physicalId]);
+                if (res != OK) {
+                    SET_ERR_L("Could not retrieve camera %s characteristics: %s (%d)",
+                            physicalId.c_str(), strerror(-res), res);
+                    session->close();
+                    return res;
+                }
             }
 
             bool usePrecorrectArray =
@@ -363,7 +375,7 @@ hardware::Return<void> HidlCamera3Device::processCaptureResult_3_4(
         mNumPartialResults, mVendorTagId, mDeviceInfo, mPhysicalDeviceInfoMap,
         mDistortionMappers, mZoomRatioMappers, mRotateAndCropMappers,
         mTagMonitor, mInputStream, mOutputStreams, mSessionStatsBuilder, listener, *this, *this,
-        *mInterface, mLegacyClient, mMinExpectedDuration}, mResultMetadataQueue
+        *mInterface, mLegacyClient, mMinExpectedDuration, mIsFixedFps}, mResultMetadataQueue
     };
 
     //HidlCaptureOutputStates hidlStates {
@@ -425,7 +437,7 @@ hardware::Return<void> HidlCamera3Device::processCaptureResult(
         mNumPartialResults, mVendorTagId, mDeviceInfo, mPhysicalDeviceInfoMap,
         mDistortionMappers, mZoomRatioMappers, mRotateAndCropMappers,
         mTagMonitor, mInputStream, mOutputStreams, mSessionStatsBuilder, listener, *this, *this,
-        *mInterface, mLegacyClient, mMinExpectedDuration}, mResultMetadataQueue
+        *mInterface, mLegacyClient, mMinExpectedDuration, mIsFixedFps}, mResultMetadataQueue
     };
 
     for (const auto& result : results) {
@@ -472,7 +484,7 @@ hardware::Return<void> HidlCamera3Device::notifyHelper(
         mNumPartialResults, mVendorTagId, mDeviceInfo, mPhysicalDeviceInfoMap,
         mDistortionMappers, mZoomRatioMappers, mRotateAndCropMappers,
         mTagMonitor, mInputStream, mOutputStreams, mSessionStatsBuilder, listener, *this, *this,
-        *mInterface, mLegacyClient, mMinExpectedDuration}, mResultMetadataQueue
+        *mInterface, mLegacyClient, mMinExpectedDuration, mIsFixedFps}, mResultMetadataQueue
     };
     for (const auto& msg : msgs) {
         camera3::notify(states, msg);

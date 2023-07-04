@@ -36,6 +36,7 @@ import android.media.EffectDescriptor;
 import android.media.IAudioFlingerClient;
 import android.media.IAudioRecord;
 import android.media.IAudioTrack;
+import android.media.LatencyMode;
 import android.media.MicrophoneInfoData;
 import android.media.RenderPosition;
 import android.media.TrackSecondaryOutputInfo;
@@ -232,6 +233,23 @@ interface IAudioFlingerService {
     int getAAudioHardwareBurstMinUsec();
 
     void setDeviceConnectedState(in AudioPort devicePort, boolean connected);
+
+    /**
+     * Requests a given latency mode (See LatencyMode.aidl) on an output stream.
+     * This can be used when some use case on a given mixer/stream can only be enabled
+     * if a specific latency mode is selected on the audio path below the HAL.
+     * For instance spatial audio with head tracking.
+     * output is the I/O handle of the output stream for which the request is made.
+     * latencyMode is the requested latency mode.
+     */
+     void setRequestedLatencyMode(int output, LatencyMode latencyMode);
+
+    /**
+     * Queries the list of latency modes (See LatencyMode.aidl) supported by an output stream.
+     * output is the I/O handle of the output stream to which the query applies.
+     * returns the list of supported latency modes.
+     */
+    LatencyMode[] getSupportedLatencyModes(int output);
 
     // When adding a new method, please review and update
     // IAudioFlinger.h AudioFlingerServerAdapter::Delegate::TransactionCode

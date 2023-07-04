@@ -362,9 +362,16 @@ public:
 
     virtual status_t setDeviceConnectedState(const struct audio_port_v7 *port, bool connected) = 0;
 
+    virtual status_t setRequestedLatencyMode(
+            audio_io_handle_t output, audio_latency_mode_t mode) = 0;
+
+    virtual status_t getSupportedLatencyModes(audio_io_handle_t output,
+            std::vector<audio_latency_mode_t>* modes) = 0;
+
     virtual status_t setAppVolume(const String8& packageName, const float value) = 0;
     virtual status_t setAppMute(const String8& packageName, const bool value) = 0;
     virtual status_t listAppVolumes(std::vector<media::AppVolume> *vols) = 0;
+
 };
 
 /**
@@ -467,6 +474,10 @@ public:
     int32_t getAAudioMixerBurstCount() override;
     int32_t getAAudioHardwareBurstMinUsec() override;
     status_t setDeviceConnectedState(const struct audio_port_v7 *port, bool connected) override;
+    status_t setRequestedLatencyMode(audio_io_handle_t output,
+            audio_latency_mode_t mode) override;
+    status_t getSupportedLatencyModes(
+            audio_io_handle_t output, std::vector<audio_latency_mode_t>* modes) override;
 
     status_t setAppVolume(const String8& packageName, const float value) override;
     status_t setAppMute(const String8& packageName, const bool value) override;
@@ -560,6 +571,8 @@ public:
             GET_AAUDIO_MIXER_BURST_COUNT = media::BnAudioFlingerService::TRANSACTION_getAAudioMixerBurstCount,
             GET_AAUDIO_HARDWARE_BURST_MIN_USEC = media::BnAudioFlingerService::TRANSACTION_getAAudioHardwareBurstMinUsec,
             SET_DEVICE_CONNECTED_STATE = media::BnAudioFlingerService::TRANSACTION_setDeviceConnectedState,
+            SET_REQUESTED_LATENCY_MODE = media::BnAudioFlingerService::TRANSACTION_setRequestedLatencyMode,
+            GET_SUPPORTED_LATENCY_MODES = media::BnAudioFlingerService::TRANSACTION_getSupportedLatencyModes,
             SET_APP_VOLUME = media::BnAudioFlingerService::TRANSACTION_setAppVolume,
             SET_APP_MUTE = media::BnAudioFlingerService::TRANSACTION_setAppMute,
             LIST_APP_VOLUMES = media::BnAudioFlingerService::TRANSACTION_listAppVolumes,
@@ -684,7 +697,9 @@ public:
     Status getAAudioMixerBurstCount(int32_t* _aidl_return) override;
     Status getAAudioHardwareBurstMinUsec(int32_t* _aidl_return) override;
     Status setDeviceConnectedState(const media::AudioPort& port, bool connected) override;
-
+    Status setRequestedLatencyMode(int output, media::LatencyMode mode) override;
+    Status getSupportedLatencyModes(int output,
+            std::vector<media::LatencyMode>* _aidl_return) override;
     Status setAppVolume(const std::string& packageName, const float value) override;
     Status setAppMute(const std::string& packageName, const bool value) override;
     Status listAppVolumes(std::vector<media::AppVolumeData> *vols) override;

@@ -310,8 +310,10 @@ private:
 
 
     effect_config_t     mConfig;    // input and output audio configuration
+public:
     sp<EffectHalInterface> mEffectInterface; // Effect module HAL
     sp<EffectBufferHalInterface> mInBuffer;  // Buffers for interacting with HAL
+private:
     sp<EffectBufferHalInterface> mOutBuffer;
     status_t            mStatus;    // initialization status
                 // First handle in mHandles has highest priority and controls the effect module
@@ -680,7 +682,9 @@ private:
     ssize_t getInsertIndex(const effect_descriptor_t& desc);
 
     mutable  Mutex mLock;        // mutex protecting effect list
+public:
              Vector< sp<EffectModule> > mEffects; // list of effect modules
+private:
              audio_session_t mSessionId; // audio session ID
              sp<EffectBufferHalInterface> mInBuffer;  // chain input buffer
              sp<EffectBufferHalInterface> mOutBuffer; // chain output buffer

@@ -111,6 +111,9 @@
 #include <vibrator/ExternalVibration.h>
 #include <vibrator/ExternalVibrationUtils.h>
 
+// MIUI ADD: DOLBY_ENABLE
+#include "ds_config.h"
+
 #include "android/media/BnAudioRecord.h"
 #include "android/media/BnEffect.h"
 
@@ -527,7 +530,9 @@ private:
 
     SimpleLog mThreadLog{16}; // 16 Thread history limit
 
+public:
     class ThreadBase;
+private:
     void dumpToThreadLog_l(const sp<ThreadBase> &thread);
 
     // --- Client ---
@@ -605,8 +610,10 @@ private:
     // Requests media.log to start merging log buffers
     void requestLogMerge();
 
+    class Track;
     class TrackHandle;
     class RecordHandle;
+public:
     class RecordThread;
     class PlaybackThread;
     class MixerThread;
@@ -615,13 +622,13 @@ private:
     class DuplicatingThread;
     class AsyncCallbackThread;
     class BitPerfectThread;
-    class Track;
     class RecordTrack;
     class EffectBase;
     class EffectModule;
     class EffectHandle;
     class EffectChain;
     class DeviceEffectProxy;
+private:
     class DeviceEffectManager;
     class PatchPanel;
     class DeviceEffectManagerCallback;
@@ -660,14 +667,18 @@ using effect_buffer_t = float;
 using effect_buffer_t = int16_t;
 #endif
 
+public:
 #include "Threads.h"
 
+private:
 #include "PatchPanel.h"
 
 #include "PatchCommandThread.h"
 
+public:
 #include "Effects.h"
 
+private:
 #include "DeviceEffectManager.h"
 
 #include "MelReporter.h"

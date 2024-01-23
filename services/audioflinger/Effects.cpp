@@ -46,6 +46,9 @@
 #include "AudioFlinger.h"
 #include "EffectConfiguration.h"
 
+// MIUI ADD: DOLBY_ENABLE
+#include "ds_config.h"
+
 // ----------------------------------------------------------------------------
 
 // Note: the following macro is used for extremely verbose logging message.  In

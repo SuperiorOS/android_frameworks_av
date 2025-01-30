@@ -1033,17 +1033,11 @@ ToneGenerator::ToneGenerator(audio_stream_type_t streamType, float volume, bool 
 
     mState = TONE_IDLE;
 
-    if (AudioSystem::getOutputSamplingRate(&mSamplingRate, streamType) != NO_ERROR) {
-        ALOGE("Unable to marshal AudioFlinger");
-        return;
-    }
     mThreadCanCallJava = threadCanCallJava;
     mStreamType = streamType;
     mVolume = volume;
     mpToneDesc = NULL;
     mpNewToneDesc = NULL;
-    // Generate tone by chunks of 20 ms to keep cadencing precision
-    mProcessSize = (mSamplingRate * 20) / 1000;
 
     char value[PROPERTY_VALUE_MAX];
     if (property_get("gsm.operator.iso-country", value, "") == 0) {
@@ -1321,21 +1315,21 @@ bool ToneGenerator::initAudioTrack() {
     mpAudioTrack = new AudioTrack(attributionSource);
     ALOGV("AudioTrack(%p) created", mpAudioTrack.get());
 
+
     audio_attributes_t attr;
     audio_stream_type_t streamType = mStreamType;
-    if (mStreamType == AUDIO_STREAM_VOICE_CALL) {
+    if (mStreamType == AUDIO_STREAM_VOICE_CALL || mStreamType == AUDIO_STREAM_BLUETOOTH_SCO) {
         streamType = AUDIO_STREAM_DTMF;
     }
     attr = AudioSystem::streamTypeToAttributes(streamType);
     attr.flags = static_cast<audio_flags_mask_t>(attr.flags | AUDIO_FLAG_LOW_LATENCY);
 
-    const size_t frameCount = mProcessSize;
     status_t status = mpAudioTrack->set(
             AUDIO_STREAM_DEFAULT,
             0,    // sampleRate
             AUDIO_FORMAT_PCM_16_BIT,
             AUDIO_CHANNEL_OUT_MONO,
-            frameCount,
+            0,    // frameCount
             AUDIO_OUTPUT_FLAG_NONE,
             wp<AudioTrack::IAudioTrackCallback>::fromExisting(this),
             0,    // notificationFrames
@@ -1354,6 +1348,10 @@ bool ToneGenerator::initAudioTrack() {
         mpAudioTrack.clear();
         return false;
     }
+
+    mSamplingRate = mpAudioTrack->getSampleRate();
+    // Generate tone by chunks of 20 ms to keep cadencing precision
+    mProcessSize = (mSamplingRate * 20) / 1000;
 
     mpAudioTrack->setVolume(mVolume);
     mState = TONE_INIT;

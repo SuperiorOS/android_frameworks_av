@@ -19,10 +19,12 @@ cc_library {
     ],
     header_libs: [
         "libaudiofoundation_headers",
+        "libaudiopolicycapengine_config_headers",
         "libaudiopolicycommon",
         "libbase_headers",
     ],
     shared_libs: [
+        "libaudiopolicyengine_config",
         "liblog",
         "libmedia_helper",
         "libparameter",

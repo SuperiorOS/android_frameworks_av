@@ -15,22 +15,32 @@
  */
 
 // #define LOG_NDEBUG 0
+#include <chrono>
+
 #include "utils/Timers.h"
 #define LOG_TAG "EglSurfaceTexture"
+
+#include <GLES/gl.h>
+#include <com_android_graphics_libgui_flags.h>
+#include <gui/BufferQueue.h>
+#include <gui/GLConsumer.h>
+#include <gui/IGraphicBufferProducer.h>
+#include <hardware/gralloc.h>
 
 #include <cstdint>
 
 #include "EglSurfaceTexture.h"
 #include "EglUtil.h"
-#include "GLES/gl.h"
-#include "gui/BufferQueue.h"
-#include "gui/GLConsumer.h"
-#include "gui/IGraphicBufferProducer.h"
-#include "hardware/gralloc.h"
 
 namespace android {
 namespace companion {
 namespace virtualcamera {
+namespace {
+
+// Maximal number of buffers producer can dequeue without blocking.
+constexpr int kBufferProducerMaxDequeueBufferCount = 64;
+
+}  // namespace
 
 EglSurfaceTexture::EglSurfaceTexture(const uint32_t width, const uint32_t height)
     : mWidth(width), mHeight(height) {
@@ -39,7 +49,23 @@ EglSurfaceTexture::EglSurfaceTexture(const uint32_t width, const uint32_t height
     ALOGE("Failed to generate texture");
     return;
   }
+
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+  mGlConsumer = sp<GLConsumer>::make(mTextureId, GLConsumer::TEXTURE_EXTERNAL,
+                                     false, false);
+  mGlConsumer->setName(String8("VirtualCameraEglSurfaceTexture"));
+  mGlConsumer->setDefaultBufferSize(mWidth, mHeight);
+  mGlConsumer->setConsumerUsageBits(GRALLOC_USAGE_HW_TEXTURE);
+  mGlConsumer->setDefaultBufferFormat(AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420);
+
+  mSurface = mGlConsumer->getSurface();
+  mSurface->setMaxDequeuedBufferCount(kBufferProducerMaxDequeueBufferCount);
+#else
   BufferQueue::createBufferQueue(&mBufferProducer, &mBufferConsumer);
+  // Set max dequeue buffer count for producer to maximal value to prevent
+  // blocking when dequeuing input buffers.
+  mBufferProducer->setMaxDequeuedBufferCount(
+      kBufferProducerMaxDequeueBufferCount);
   mGlConsumer = sp<GLConsumer>::make(
       mBufferConsumer, mTextureId, GLConsumer::TEXTURE_EXTERNAL, false, false);
   mGlConsumer->setName(String8("VirtualCameraEglSurfaceTexture"));
@@ -48,6 +74,7 @@ EglSurfaceTexture::EglSurfaceTexture(const uint32_t width, const uint32_t height
   mGlConsumer->setDefaultBufferFormat(AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420);
 
   mSurface = sp<Surface>::make(mBufferProducer);
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
 }
 
 EglSurfaceTexture::~EglSurfaceTexture() {
@@ -74,8 +101,31 @@ bool EglSurfaceTexture::waitForNextFrame(const std::chrono::nanoseconds timeout)
                                     static_cast<nsecs_t>(timeout.count()));
 }
 
+std::chrono::nanoseconds EglSurfaceTexture::getTimestamp() {
+  return std::chrono::nanoseconds(mGlConsumer->getTimestamp());
+}
+
 GLuint EglSurfaceTexture::updateTexture() {
-  mGlConsumer->updateTexImage();
+  int previousFrameId;
+  int framesAdvance = 0;
+  // Consume buffers one at the time.
+  // Contrary to the code comments in GLConsumer, the GLConsumer acquires
+  // next queued buffer (not the most recently queued buffer).
+  while (true) {
+    previousFrameId = mGlConsumer->getFrameNumber();
+    mGlConsumer->updateTexImage();
+    int currentFrameId = mGlConsumer->getFrameNumber();
+    if (previousFrameId == currentFrameId) {
+      // Frame number didn't change after updating the texture,
+      // this means we're at the end of the queue and current attached
+      // buffer is the most recent buffer.
+      break;
+    }
+
+    framesAdvance++;
+    previousFrameId = currentFrameId;
+  }
+  ALOGV("%s: Advanced %d frames", __func__, framesAdvance);
   return mTextureId;
 }
 

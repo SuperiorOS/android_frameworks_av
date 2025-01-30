@@ -44,8 +44,14 @@ public:
     /**
      * Forward iterator to this class.  Implements an std:forward_iterator.
      */
-    class iterator : public std::iterator<std::forward_iterator_tag, T> {
+    class iterator {
     public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = T;
+        using difference_type = std::ptrdiff_t;
+        using pointer = T*;
+        using reference = T&;
+
         iterator(T* ptr, size_t size, size_t pos, size_t ctr);
 
         iterator& operator++();
@@ -357,5 +363,3 @@ void RingBuffer<T>::clear() {
 }; // namespace android
 
 #endif // ANDROID_SERVICE_UTILS_RING_BUFFER_H
-
-

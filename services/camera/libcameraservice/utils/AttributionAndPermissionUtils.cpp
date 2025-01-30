@@ -80,6 +80,33 @@ void AttributionAndPermissionUtils::restoreCallingIdentity(int64_t token) {
     return;
 }
 
+// TODO(362551824): Make USE_CALLING_UID more explicit with a scoped enum.
+bool AttributionAndPermissionUtils::resolveClientUid(/*inout*/ int& clientUid) {
+    int callingUid = getCallingUid();
+
+    if (clientUid == hardware::ICameraService::USE_CALLING_UID) {
+        clientUid = callingUid;
+    } else if (!isTrustedCallingUid(callingUid)) {
+        return false;
+    }
+
+    return true;
+}
+
+// TODO(362551824): Make USE_CALLING_UID more explicit with a scoped enum.
+bool AttributionAndPermissionUtils::resolveClientPid(/*inout*/ int& clientPid) {
+    int callingUid = getCallingUid();
+    int callingPid = getCallingPid();
+
+    if (clientPid == hardware::ICameraService::USE_CALLING_PID) {
+        clientPid = callingPid;
+    } else if (!isTrustedCallingUid(callingUid)) {
+        return false;
+    }
+
+    return true;
+}
+
 bool AttributionAndPermissionUtils::checkAutomotivePrivilegedClient(const std::string &cameraId,
         const AttributionSourceState &attributionSource) {
     if (isAutomotivePrivilegedClient(attributionSource.uid)) {

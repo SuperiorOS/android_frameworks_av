@@ -555,22 +555,24 @@ status_t AudioAnalytics::submit(
 }
 
 std::pair<std::string, int32_t> AudioAnalytics::dump(
-        int32_t lines, int64_t sinceNs, const char *prefix) const
+        bool details, int32_t lines, int64_t sinceNs, const char *prefix) const
 {
     std::stringstream ss;
     int32_t ll = lines;
 
     if (ll > 0) {
-        auto [s, l] = mAnalyticsState->dump(ll, sinceNs, prefix);
+        auto [s, l] = mAnalyticsState->dump(details, ll, sinceNs, prefix);
         ss << s;
         ll -= l;
     }
-    if (ll > 0) {
+
+    // use details to dump prior state.
+    if (details && ll > 0) {
         ss << "Prior audioserver state:\n";
         --ll;
     }
-    if (ll > 0) {
-        auto [s, l] = mPreviousAnalyticsState->dump(ll, sinceNs, prefix);
+    if (details && ll > 0) {
+        auto [s, l] = mPreviousAnalyticsState->dump(details, ll, sinceNs, prefix);
         ss << s;
         ll -= l;
     }

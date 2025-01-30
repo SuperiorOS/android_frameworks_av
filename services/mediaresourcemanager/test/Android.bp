@@ -30,7 +30,7 @@ cc_test {
         "server_configurable_flags",
     ],
     defaults: [
-        "aconfig_lib_cc_static_link.defaults",
+        "aconfig_lib_cc_shared_link.defaults",
     ],
     include_dirs: [
         "frameworks/av/include",
@@ -83,6 +83,9 @@ cc_test {
         "libstatssocket",
         "libactivitymanager_aidl",
         "server_configurable_flags",
+    ],
+    defaults: [
+        "aconfig_lib_cc_shared_link.defaults",
     ],
     include_dirs: [
         "frameworks/av/include",

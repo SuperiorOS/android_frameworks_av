@@ -130,12 +130,12 @@ private:
     static const auto kDepthMapDataSpace = HAL_DATASPACE_DEPTH;
     static const auto kJpegDataSpace = HAL_DATASPACE_V0_JFIF;
 
-    int                  mBlobStreamId, mBlobSurfaceId, mDepthStreamId, mDepthSurfaceId;
-    size_t               mBlobWidth, mBlobHeight;
-    sp<CpuConsumer>      mBlobConsumer, mDepthConsumer;
-    bool                 mDepthBufferAcquired, mBlobBufferAcquired;
-    sp<Surface>          mDepthSurface, mBlobSurface, mOutputSurface;
-    sp<ProducerListener> mProducerListener;
+    int                         mBlobStreamId, mBlobSurfaceId, mDepthStreamId, mDepthSurfaceId;
+    size_t                      mBlobWidth, mBlobHeight;
+    sp<CpuConsumer>             mBlobConsumer, mDepthConsumer;
+    bool                        mDepthBufferAcquired, mBlobBufferAcquired;
+    sp<Surface>                 mDepthSurface, mBlobSurface, mOutputSurface;
+    sp<StreamSurfaceListener>   mStreamSurfaceListener;
 
     ssize_t              mMaxJpegBufferSize;
     ssize_t              mUHRMaxJpegBufferSize;

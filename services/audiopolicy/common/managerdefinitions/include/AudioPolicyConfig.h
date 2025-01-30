@@ -16,10 +16,10 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
 
 #include <DeviceDescriptor.h>
 #include <HwModule.h>
@@ -49,6 +49,7 @@ public:
     static const constexpr char* const kDefaultConfigSource = "AudioPolicyConfig::setDefault";
     // The suffix of the "engine default" implementation shared library name.
     static const constexpr char* const kDefaultEngineLibraryNameSuffix = "default";
+    static const constexpr char* const kCapEngineLibraryNameSuffix = "configurable";
 
     // Creates the default (fallback) configuration.
     static sp<const AudioPolicyConfig> createDefault();
@@ -140,6 +141,12 @@ public:
 
     void setDefault();
 
+    void setUseDeepBufferForMediaOverrideForTests(bool useDeepBufferForMedia)
+    {
+        mUseDeepBufferForMediaOverride = useDeepBufferForMedia;
+    }
+    bool useDeepBufferForMedia() const;
+
 private:
     friend class sp<AudioPolicyConfig>;
 
@@ -157,6 +164,7 @@ private:
     sp<DeviceDescriptor> mDefaultOutputDevice;
     bool mIsCallScreenModeSupported = false;
     SurroundFormats mSurroundFormats;
+    std::optional<bool> mUseDeepBufferForMediaOverride;
 };
 
 } // namespace android

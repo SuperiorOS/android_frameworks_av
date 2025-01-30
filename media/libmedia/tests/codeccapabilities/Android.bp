@@ -1,0 +1,36 @@
+cc_test {
+    name: "CodecCapabilitiesTest",
+    team: "trendy_team_media_codec_framework",
+
+    test_suites: [
+        "general-tests",
+    ],
+    gtest: true,
+
+    srcs: [
+        "CodecCapabilitiesTest.cpp",
+    ],
+
+    shared_libs: [
+        "libbinder",
+        "liblog",
+        "libmedia_codeclist", // available >= R
+        "libmedia_codeclist_capabilities",
+        "libstagefright",
+        "libstagefright_foundation",
+        "libutils",
+    ],
+
+    cflags: [
+        "-Werror",
+        "-Wall",
+    ],
+
+    sanitize: {
+        cfi: true,
+        misc_undefined: [
+            "unsigned-integer-overflow",
+            "signed-integer-overflow",
+        ],
+    },
+}

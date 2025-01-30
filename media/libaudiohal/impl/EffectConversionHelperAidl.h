@@ -51,6 +51,8 @@ class EffectConversionHelperAidl {
 
     size_t getAudioChannelCount() const;
     size_t getHapticChannelCount() const;
+    size_t getInputChannelCount() const;
+    size_t getOutputChannelCount() const;
 
     uint8_t mOutputAccessMode = EFFECT_BUFFER_ACCESS_WRITE;
 

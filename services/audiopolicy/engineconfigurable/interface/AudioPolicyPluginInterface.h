@@ -98,7 +98,8 @@ public:
     virtual bool setDeviceTypesForProductStrategy(product_strategy_t strategy,
                                                   uint64_t devices) = 0;
 
-    virtual product_strategy_t getProductStrategyByName(const std::string &address) = 0;
+    virtual product_strategy_t getProductStrategyByName(const std::string &name) = 0;
+    virtual std::string getProductStrategyName(product_strategy_t id) const = 0;
 
 protected:
     virtual ~AudioPolicyPluginInterface() {}

@@ -55,6 +55,17 @@ extern "C" binder_exception_t queryEffect(const AudioUuid* in_impl_uuid, Descrip
 
 namespace aidl::android::hardware::audio::effect {
 
+const std::vector<Range::HapticGeneratorRange> kHapticRange = {
+        MAKE_RANGE(HapticGenerator, vibratorInfo,
+                   HapticGenerator::VibratorInformation(
+                           {.resonantFrequencyHz = 1, .qFactor = 1, .maxAmplitude = -1}),
+                   HapticGenerator::VibratorInformation(
+                           {.resonantFrequencyHz = std::numeric_limits<float>::max(),
+                            .qFactor = std::numeric_limits<float>::max(),
+                            .maxAmplitude = 1}))};
+
+static const Capability kHapticCap = {.range = kHapticRange};
+
 const std::string HapticGeneratorImpl::kEffectName = "Haptic Generator";
 const Descriptor HapticGeneratorImpl::kDescriptor = {
         .common = {.id = {.type = getEffectTypeUuidHapticGenerator(),
@@ -62,31 +73,12 @@ const Descriptor HapticGeneratorImpl::kDescriptor = {
                           .proxy = std::nullopt},
                    .flags = {.type = Flags::Type::INSERT, .insert = Flags::Insert::FIRST},
                    .name = HapticGeneratorImpl::kEffectName,
-                   .implementor = "The Android Open Source Project"}};
+                   .implementor = "The Android Open Source Project"},
+        .capability = kHapticCap};
 
 ndk::ScopedAStatus HapticGeneratorImpl::getDescriptor(Descriptor* _aidl_return) {
     RETURN_IF(!_aidl_return, EX_ILLEGAL_ARGUMENT, "Parameter:nullptr");
     *_aidl_return = kDescriptor;
-    return ndk::ScopedAStatus::ok();
-}
-
-ndk::ScopedAStatus HapticGeneratorImpl::commandImpl(CommandId command) {
-    RETURN_IF(!mContext, EX_NULL_POINTER, "nullContext");
-    switch (command) {
-        case CommandId::START:
-            mContext->enable();
-            break;
-        case CommandId::STOP:
-            mContext->disable();
-            break;
-        case CommandId::RESET:
-            mContext->reset();
-            break;
-        default:
-            LOG(ERROR) << __func__ << " commandId " << toString(command) << " not supported";
-            return ndk::ScopedAStatus::fromExceptionCodeWithMessage(EX_ILLEGAL_ARGUMENT,
-                                                                    "commandIdNotSupported");
-    }
     return ndk::ScopedAStatus::ok();
 }
 
@@ -96,6 +88,8 @@ ndk::ScopedAStatus HapticGeneratorImpl::setParameterSpecific(const Parameter::Sp
     RETURN_IF(!mContext, EX_NULL_POINTER, "nullContext");
 
     auto& hgParam = specific.get<Parameter::Specific::hapticGenerator>();
+    RETURN_IF(!inRange(hgParam, kHapticRange), EX_ILLEGAL_ARGUMENT, "outOfRange");
+
     auto tag = hgParam.getTag();
 
     switch (tag) {

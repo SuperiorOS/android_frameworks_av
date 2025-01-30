@@ -188,6 +188,14 @@ bool AudioTrack::isDirectOutputSupported(const audio_config_base_t& config,
     return result.value_or(false);
 }
 
+status_t AudioTrack::logIfErrorAndReturnStatus(status_t status, const std::string& errorMessage) {
+    if (status != NO_ERROR) {
+        ALOGE_IF(!errorMessage.empty(), "%s", errorMessage.c_str());
+        reportError(status, AMEDIAMETRICS_PROP_EVENT_VALUE_CREATE, errorMessage.c_str());
+    }
+    mStatus = status;
+    return mStatus;
+}
 // ---------------------------------------------------------------------------
 
 void AudioTrack::MediaMetrics::gather(const AudioTrack *track)
@@ -319,13 +327,6 @@ AudioTrack::AudioTrack(
         const audio_attributes_t* pAttributes,
         bool doNotReconnect,
         float maxRequiredSpeed)
-    : mStatus(NO_INIT),
-      mState(STATE_STOPPED),
-      mPreviousPriority(ANDROID_PRIORITY_NORMAL),
-      mPreviousSchedulingGroup(SP_DEFAULT),
-      mPausedPosition(0),
-      mSelectedDeviceId(AUDIO_PORT_HANDLE_NONE),
-      mAudioTrackCallback(new AudioTrackCallback())
 {
     mAttributes = AUDIO_ATTRIBUTES_INITIALIZER;
 
@@ -371,6 +372,10 @@ AudioTrack::~AudioTrack()
                 __func__, mPortId,
                 mSessionId, IPCThreadState::self()->getCallingPid(), clientPid);
         AudioSystem::releaseAudioSessionId(mSessionId, clientPid);
+    }
+
+    if (mOutput != AUDIO_IO_HANDLE_NONE) {
+        AudioSystem::removeAudioDeviceCallback(this, mOutput, mPortId);
     }
 }
 
@@ -420,9 +425,16 @@ status_t AudioTrack::set(
     uint32_t channelCount;
     pid_t callingPid;
     pid_t myPid;
-    uid_t uid = VALUE_OR_FATAL(aidl2legacy_int32_t_uid_t(attributionSource.uid));
-    pid_t pid = VALUE_OR_FATAL(aidl2legacy_int32_t_pid_t(attributionSource.pid));
-    std::string errorMessage;
+    auto uid = aidl2legacy_int32_t_uid_t(attributionSource.uid);
+    auto pid = aidl2legacy_int32_t_pid_t(attributionSource.pid);
+    if (!uid.ok()) {
+        return logIfErrorAndReturnStatus(
+                BAD_VALUE, StringPrintf("%s: received invalid attribution source uid", __func__));
+    }
+    if (!pid.ok()) {
+        return logIfErrorAndReturnStatus(
+                BAD_VALUE, StringPrintf("%s: received invalid attribution source pid", __func__));
+    }
     // Note mPortId is not valid until the track is created, so omit mPortId in ALOG for set.
     ALOGV("%s(): streamType %d, sampleRate %u, format %#x, channelMask %#x, frameCount %zu, "
           "flags %#x, notificationFrames %d, sessionId %d, transferType %d, uid %d, pid %d",
@@ -493,34 +505,33 @@ status_t AudioTrack::set(
     case TRANSFER_CALLBACK:
     case TRANSFER_SYNC_NOTIF_CALLBACK:
         if (callback == nullptr || sharedBuffer != 0) {
-            errorMessage = StringPrintf(
-                    "%s: Transfer type %s but callback == nullptr || sharedBuffer != 0",
-                    convertTransferToText(transferType), __func__);
-            status = BAD_VALUE;
-            goto error;
+            return logIfErrorAndReturnStatus(
+                    BAD_VALUE,
+                    StringPrintf(
+                            "%s: Transfer type %s but callback == nullptr || sharedBuffer != 0",
+                            convertTransferToText(transferType), __func__));
         }
         break;
     case TRANSFER_OBTAIN:
     case TRANSFER_SYNC:
         if (sharedBuffer != 0) {
-            errorMessage = StringPrintf(
-                    "%s: Transfer type TRANSFER_OBTAIN but sharedBuffer != 0", __func__);
-            status = BAD_VALUE;
-            goto error;
+            return logIfErrorAndReturnStatus(
+                    BAD_VALUE,
+                    StringPrintf("%s: Transfer type TRANSFER_OBTAIN but sharedBuffer != 0",
+                                 __func__));
         }
         break;
     case TRANSFER_SHARED:
         if (sharedBuffer == 0) {
-            errorMessage = StringPrintf(
-                    "%s: Transfer type TRANSFER_SHARED but sharedBuffer == 0", __func__);
-            status = BAD_VALUE;
-            goto error;
+            return logIfErrorAndReturnStatus(
+                    BAD_VALUE,
+                    StringPrintf("%s: Transfer type TRANSFER_SHARED but sharedBuffer == 0",
+                                 __func__));
         }
         break;
     default:
-        errorMessage = StringPrintf("%s: Invalid transfer type %d", __func__, transferType);
-        status = BAD_VALUE;
-        goto error;
+        return logIfErrorAndReturnStatus(
+                BAD_VALUE, StringPrintf("%s: Invalid transfer type %d", __func__, transferType));
     }
     mSharedBuffer = sharedBuffer;
     mTransfer = transferType;
@@ -531,9 +542,8 @@ status_t AudioTrack::set(
 
     // invariant that mAudioTrack != 0 is true only after set() returns successfully
     if (mAudioTrack != 0) {
-        errorMessage = StringPrintf("%s: Track already in use", __func__);
-        status = INVALID_OPERATION;
-        goto error;
+        return logIfErrorAndReturnStatus(INVALID_OPERATION,
+                                         StringPrintf("%s: Track already in use", __func__));
     }
 
     // handle default values first.
@@ -542,9 +552,8 @@ status_t AudioTrack::set(
     }
     if (pAttributes == NULL) {
         if (uint32_t(streamType) >= AUDIO_STREAM_PUBLIC_CNT) {
-            errorMessage = StringPrintf("%s: Invalid stream type %d", __func__, streamType);
-            status = BAD_VALUE;
-            goto error;
+            return logIfErrorAndReturnStatus(
+                    BAD_VALUE, StringPrintf("%s: Invalid stream type %d", __func__, streamType));
         }
         mOriginalStreamType = streamType;
     } else {
@@ -553,15 +562,13 @@ status_t AudioTrack::set(
 
     // validate parameters
     if (!audio_is_valid_format(format)) {
-        errorMessage = StringPrintf("%s: Invalid format %#x", __func__, format);
-        status = BAD_VALUE;
-        goto error;
+        return logIfErrorAndReturnStatus(BAD_VALUE,
+                                         StringPrintf("%s: Invalid format %#x", __func__, format));
     }
 
     if (!audio_is_output_channel(channelMask)) {
-        errorMessage = StringPrintf("%s: Invalid channel mask %#x",  __func__, channelMask);
-        status = BAD_VALUE;
-        goto error;
+        return logIfErrorAndReturnStatus(
+                BAD_VALUE, StringPrintf("%s: Invalid channel mask %#x", __func__, channelMask));
     }
     channelCount = audio_channel_count_from_out_mask(channelMask);
     mChannelCount = channelCount;
@@ -576,10 +583,9 @@ status_t AudioTrack::set(
 
     // sampling rate must be specified for direct outputs
     if (sampleRate == 0 && (mFlags & AUDIO_OUTPUT_FLAG_DIRECT) != 0) {
-        errorMessage = StringPrintf(
-                "%s: sample rate must be specified for direct outputs", __func__);
-        status = BAD_VALUE;
-        goto error;
+        return logIfErrorAndReturnStatus(
+                BAD_VALUE,
+                StringPrintf("%s: sample rate must be specified for direct outputs", __func__));
     }
     // 1.0 <= mMaxRequiredSpeed <= AUDIO_TIMESTRETCH_SPEED_MAX
     mMaxRequiredSpeed = min(max(maxRequiredSpeed, 1.0f), AUDIO_TIMESTRETCH_SPEED_MAX);
@@ -607,17 +613,16 @@ status_t AudioTrack::set(
         mNotificationsPerBufferReq = 0;
     } else {
         if (!(mFlags & AUDIO_OUTPUT_FLAG_FAST)) {
-            errorMessage = StringPrintf(
-                    "%s: notificationFrames=%d not permitted for non-fast track",
-                    __func__, notificationFrames);
-            status = BAD_VALUE;
-            goto error;
+            return logIfErrorAndReturnStatus(
+                    BAD_VALUE,
+                    StringPrintf("%s: notificationFrames=%d not permitted for non-fast track",
+                                 __func__, notificationFrames));
         }
         if (frameCount > 0) {
-            ALOGE("%s(): notificationFrames=%d not permitted with non-zero frameCount=%zu",
-                    __func__, notificationFrames, frameCount);
-            status = BAD_VALUE;
-            goto error;
+            return logIfErrorAndReturnStatus(
+                    BAD_VALUE, StringPrintf("%s(): notificationFrames=%d not permitted "
+                                            "with non-zero frameCount=%zu",
+                                            __func__, notificationFrames, frameCount));
         }
         mNotificationFramesReq = 0;
         const uint32_t minNotificationsPerBuffer = 1;
@@ -634,12 +639,24 @@ status_t AudioTrack::set(
     mClientAttributionSource = AttributionSourceState(attributionSource);
     callingPid = IPCThreadState::self()->getCallingPid();
     myPid = getpid();
-    if (uid == -1 || (callingPid != myPid)) {
-        mClientAttributionSource.uid = VALUE_OR_FATAL(legacy2aidl_uid_t_int32_t(
-            IPCThreadState::self()->getCallingUid()));
+    if (uid.value() == -1 || (callingPid != myPid)) {
+        auto clientAttributionSourceUid =
+                legacy2aidl_uid_t_int32_t(IPCThreadState::self()->getCallingUid());
+        if (!clientAttributionSourceUid.ok()) {
+            return logIfErrorAndReturnStatus(
+                    BAD_VALUE,
+                    StringPrintf("%s: received invalid client attribution source uid", __func__));
+        }
+        mClientAttributionSource.uid = clientAttributionSourceUid.value();
     }
-    if (pid == (pid_t)-1 || (callingPid != myPid)) {
-        mClientAttributionSource.pid = VALUE_OR_FATAL(legacy2aidl_uid_t_int32_t(callingPid));
+    if (pid.value() == (pid_t)-1 || (callingPid != myPid)) {
+        auto clientAttributionSourcePid = legacy2aidl_uid_t_int32_t(callingPid);
+        if (!clientAttributionSourcePid.ok()) {
+            return logIfErrorAndReturnStatus(
+                    BAD_VALUE,
+                    StringPrintf("%s: received invalid client attribution source pid", __func__));
+        }
+        mClientAttributionSource.pid = clientAttributionSourcePid.value();
     }
     mAuxEffectId = 0;
     mCallback = callback;
@@ -662,7 +679,8 @@ status_t AudioTrack::set(
             mAudioTrackThread.clear();
         }
         // We do not goto error to prevent double-logging errors.
-        goto exit;
+        mStatus = status;
+        return mStatus;
     }
 
     mLoopCount = 0;
@@ -677,7 +695,7 @@ status_t AudioTrack::set(
     mReleased = 0;
     mStartNs = 0;
     mStartFromZeroUs = 0;
-    AudioSystem::acquireAudioSessionId(mSessionId, pid, uid);
+    AudioSystem::acquireAudioSessionId(mSessionId, pid.value(), uid.value());
     mSequence = 1;
     mObservedSequence = mSequence;
     mInUnderrun = false;
@@ -695,15 +713,7 @@ status_t AudioTrack::set(
     mFramesWrittenAtRestore = -1; // -1 is a unique initializer.
     mVolumeHandler = new media::VolumeHandler();
 
-error:
-    if (status != NO_ERROR) {
-        ALOGE_IF(!errorMessage.empty(), "%s", errorMessage.c_str());
-        reportError(status, AMEDIAMETRICS_PROP_EVENT_VALUE_CREATE, errorMessage.c_str());
-    }
-    // fall through
-exit:
-    mStatus = status;
-    return status;
+    return logIfErrorAndReturnStatus(status, "");
 }
 
 
@@ -730,8 +740,22 @@ status_t AudioTrack::set(
         audio_port_handle_t selectedDeviceId)
 {
     AttributionSourceState attributionSource;
-    attributionSource.uid = VALUE_OR_FATAL(legacy2aidl_uid_t_int32_t(uid));
-    attributionSource.pid = VALUE_OR_FATAL(legacy2aidl_pid_t_int32_t(pid));
+    auto attributionSourceUid = legacy2aidl_uid_t_int32_t(uid);
+    if (!attributionSourceUid.ok()) {
+        return logIfErrorAndReturnStatus(
+                BAD_VALUE,
+                StringPrintf("%s: received invalid attribution source uid, uid: %d, session id: %d",
+                             __func__, uid, sessionId));
+    }
+    attributionSource.uid = attributionSourceUid.value();
+    auto attributionSourcePid = legacy2aidl_pid_t_int32_t(pid);
+    if (!attributionSourcePid.ok()) {
+        return logIfErrorAndReturnStatus(
+                BAD_VALUE,
+                StringPrintf("%s: received invalid attribution source pid, pid: %d, sessionId: %d",
+                             __func__, pid, sessionId));
+    }
+    attributionSource.pid = attributionSourcePid.value();
     attributionSource.token = sp<BBinder>::make();
     if (callback) {
         mLegacyCallbackWrapper = sp<LegacyCallbackWrapper>::make(callback, user);
@@ -1683,6 +1707,18 @@ status_t AudioTrack::setOutputDevice(audio_port_handle_t deviceId) {
     AutoMutex lock(mLock);
     ALOGV("%s(%d): deviceId=%d mSelectedDeviceId=%d",
             __func__, mPortId, deviceId, mSelectedDeviceId);
+    const int64_t beginNs = systemTime();
+    mediametrics::Defer defer([&] {
+        mediametrics::LogItem(mMetricsId)
+                .set(AMEDIAMETRICS_PROP_CALLERNAME,
+                     mCallerName.empty()
+                     ? AMEDIAMETRICS_PROP_CALLERNAME_VALUE_UNKNOWN
+                     : mCallerName.c_str())
+                .set(AMEDIAMETRICS_PROP_EVENT, AMEDIAMETRICS_PROP_EVENT_VALUE_SETPREFERREDDEVICE)
+                .set(AMEDIAMETRICS_PROP_EXECUTIONTIMENS, (int64_t)(systemTime() - beginNs))
+                .set(AMEDIAMETRICS_PROP_SELECTEDDEVICEID, (int32_t)deviceId)
+                .record(); });
+
     if (mSelectedDeviceId != deviceId) {
         mSelectedDeviceId = deviceId;
         if (mStatus == NO_ERROR) {
@@ -1799,15 +1835,11 @@ const char * AudioTrack::convertTransferToText(transfer_type transferType) {
 status_t AudioTrack::createTrack_l()
 {
     status_t status;
-    bool callbackAdded = false;
-    std::string errorMessage;
 
     const sp<IAudioFlinger>& audioFlinger = AudioSystem::get_audio_flinger();
     if (audioFlinger == 0) {
-        errorMessage = StringPrintf("%s(%d): Could not get audioflinger",
-                __func__, mPortId);
-        status = DEAD_OBJECT;
-        goto exit;
+        return logIfErrorAndReturnStatus(
+                DEAD_OBJECT, StringPrintf("%s(%d): Could not get audioflinger", __func__, mPortId));
     }
 
     {
@@ -1875,21 +1907,31 @@ status_t AudioTrack::createTrack_l()
     input.audioTrackCallback = mAudioTrackCallback;
 
     media::CreateTrackResponse response;
-    status = audioFlinger->createTrack(VALUE_OR_FATAL(input.toAidl()), response);
+    auto aidlInput = input.toAidl();
+    if (!aidlInput.ok()) {
+        return logIfErrorAndReturnStatus(
+                BAD_VALUE, StringPrintf("%s(%d): Could not create track due to invalid input",
+                                        __func__, mPortId));
+    }
+    status = audioFlinger->createTrack(aidlInput.value(), response);
 
     IAudioFlinger::CreateTrackOutput output{};
     if (status == NO_ERROR) {
-        output = VALUE_OR_FATAL(IAudioFlinger::CreateTrackOutput::fromAidl(response));
+        auto trackOutput = IAudioFlinger::CreateTrackOutput::fromAidl(response);
+        if (!trackOutput.ok()) {
+            return logIfErrorAndReturnStatus(
+                    BAD_VALUE,
+                    StringPrintf("%s(%d): Could not create track output due to invalid response",
+                                 __func__, mPortId));
+        }
+        output = trackOutput.value();
     }
 
     if (status != NO_ERROR || output.outputId == AUDIO_IO_HANDLE_NONE) {
-        errorMessage = StringPrintf(
-                "%s(%d): AudioFlinger could not create track, status: %d output %d",
-                __func__, mPortId, status, output.outputId);
-        if (status == NO_ERROR) {
-            status = INVALID_OPERATION; // device not ready
-        }
-        goto exit;
+        return logIfErrorAndReturnStatus(
+                status == NO_ERROR ? INVALID_OPERATION : status,  // device not ready
+                StringPrintf("%s(%d): AudioFlinger could not create track, status: %d output %d",
+                             __func__, mPortId, status, output.outputId));
     }
     ALOG_ASSERT(output.audioTrack != 0);
 
@@ -1919,22 +1961,22 @@ status_t AudioTrack::createTrack_l()
     // FIXME compare to AudioRecord
     std::optional<media::SharedFileRegion> sfr;
     output.audioTrack->getCblk(&sfr);
-    sp<IMemory> iMem = VALUE_OR_FATAL(aidl2legacy_NullableSharedFileRegion_IMemory(sfr));
-    if (iMem == 0) {
-        errorMessage = StringPrintf("%s(%d): Could not get control block", __func__, mPortId);
-        status = FAILED_TRANSACTION;
-        goto exit;
+    auto iMemory = aidl2legacy_NullableSharedFileRegion_IMemory(sfr);
+    if (!iMemory.ok() || iMemory.value() == 0) {
+        return logIfErrorAndReturnStatus(
+                FAILED_TRANSACTION,
+                StringPrintf("%s(%d): Could not get control block", __func__, mPortId));
     }
+    sp<IMemory> iMem = iMemory.value();
     // TODO: Using unsecurePointer() has some associated security pitfalls
     //       (see declaration for details).
     //       Either document why it is safe in this case or address the
     //       issue (e.g. by copying).
     void *iMemPointer = iMem->unsecurePointer();
     if (iMemPointer == NULL) {
-        errorMessage = StringPrintf(
-                "%s(%d): Could not get control block pointer", __func__, mPortId);
-        status = FAILED_TRANSACTION;
-        goto exit;
+        return logIfErrorAndReturnStatus(
+                FAILED_TRANSACTION,
+                StringPrintf("%s(%d): Could not get control block pointer", __func__, mPortId));
     }
     // invariant that mAudioTrack != 0 is true only after set() returns successfully
     if (mAudioTrack != 0) {
@@ -1969,7 +2011,6 @@ status_t AudioTrack::createTrack_l()
             AudioSystem::removeAudioDeviceCallback(this, mOutput, mPortId);
         }
         AudioSystem::addAudioDeviceCallback(this, output.outputId, output.portId);
-        callbackAdded = true;
     }
 
     mPortId = output.portId;
@@ -1994,11 +2035,9 @@ status_t AudioTrack::createTrack_l()
         //       issue (e.g. by copying).
         buffers = mSharedBuffer->unsecurePointer();
         if (buffers == NULL) {
-            errorMessage = StringPrintf(
-                    "%s(%d): Could not get buffer pointer", __func__, mPortId);
-            ALOGE("%s", errorMessage.c_str());
-            status = FAILED_TRANSACTION;
-            goto exit;
+            return logIfErrorAndReturnStatus(
+                    FAILED_TRANSACTION,
+                    StringPrintf("%s(%d): Could not get buffer pointer", __func__, mPortId));
         }
     }
 
@@ -2095,19 +2134,8 @@ status_t AudioTrack::createTrack_l()
 
     }
 
-exit:
-    if (status != NO_ERROR) {
-        if (callbackAdded) {
-            // note: mOutput is always valid is callbackAdded is true
-            AudioSystem::removeAudioDeviceCallback(this, mOutput, mPortId);
-        }
-        ALOGE_IF(!errorMessage.empty(), "%s", errorMessage.c_str());
-        reportError(status, AMEDIAMETRICS_PROP_EVENT_VALUE_CREATE, errorMessage.c_str());
-    }
-    mStatus = status;
-
     // sp<IAudioTrack> track destructor will cause releaseOutput() to be called by AudioFlinger
-    return status;
+    return logIfErrorAndReturnStatus(status, "");
 }
 
 void AudioTrack::reportError(status_t status, const char *event, const char *message) const
@@ -2408,12 +2436,14 @@ nsecs_t AudioTrack::processAudioBuffer()
     int32_t flags = android_atomic_and(
         ~(CBLK_UNDERRUN | CBLK_LOOP_CYCLE | CBLK_LOOP_FINAL | CBLK_BUFFER_END), &mCblk->mFlags);
 
+    const bool isOffloaded = isOffloaded_l();
+    const bool isOffloadedOrDirect = isOffloadedOrDirect_l();
     // Check for track invalidation
     if (flags & CBLK_INVALID) {
         // for offloaded tracks restoreTrack_l() will just update the sequence and clear
         // AudioSystem cache. We should not exit here but after calling the callback so
         // that the upper layers can recreate the track
-        if (!isOffloadedOrDirect_l() || (mSequence == mObservedSequence)) {
+        if (!isOffloadedOrDirect || (mSequence == mObservedSequence)) {
             status_t status __unused = restoreTrack_l("processAudioBuffer");
             // FIXME unused status
             // after restoration, continue below to make sure that the loop and buffer events
@@ -2583,7 +2613,7 @@ nsecs_t AudioTrack::processAudioBuffer()
         mObservedSequence = sequence;
         callback->onNewIAudioTrack();
         // for offloaded tracks, just wait for the upper layers to recreate the track
-        if (isOffloadedOrDirect()) {
+        if (isOffloadedOrDirect) {
             return NS_INACTIVE;
         }
     }
@@ -2671,7 +2701,7 @@ nsecs_t AudioTrack::processAudioBuffer()
                 __func__, mPortId, mRemainingFrames, avail, audioBuffer.frameCount, nonContig, err);
         if (err != NO_ERROR) {
             if (err == TIMED_OUT || err == WOULD_BLOCK || err == -EINTR ||
-                    (isOffloaded() && (err == DEAD_OBJECT))) {
+                    (isOffloaded && (err == DEAD_OBJECT))) {
                 // FIXME bug 25195759
                 return 1000000;
             }
@@ -2757,7 +2787,7 @@ nsecs_t AudioTrack::processAudioBuffer()
             // buffer size and skip the loop entirely.
 
             nsecs_t myns;
-            if (audio_has_proportional_frames(mFormat)) {
+            if (!isOffloaded && audio_has_proportional_frames(mFormat)) {
                 // time to wait based on buffer occupancy
                 const nsecs_t datans = mRemainingFrames <= avail ? 0 :
                         framesToNanoseconds(mRemainingFrames - avail, sampleRate, speed);
@@ -3196,7 +3226,12 @@ status_t AudioTrack::getTimestamp_l(AudioTimestamp& timestamp)
         media::AudioTimestampInternal ts;
         mAudioTrack->getTimestamp(&ts, &status);
         if (status == OK) {
-            timestamp = VALUE_OR_FATAL(aidl2legacy_AudioTimestampInternal_AudioTimestamp(ts));
+            auto legacyTs = aidl2legacy_AudioTimestampInternal_AudioTimestamp(ts);
+            if (!legacyTs.ok()) {
+                return logIfErrorAndReturnStatus(
+                        BAD_VALUE, StringPrintf("%s: received invalid audio timestamp", __func__));
+            }
+            timestamp = legacyTs.value();
         }
     } else {
         // read timestamp from shared memory

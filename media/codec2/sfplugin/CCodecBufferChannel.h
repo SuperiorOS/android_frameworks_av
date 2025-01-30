@@ -102,6 +102,7 @@ public:
             const sp<MediaCodecBuffer> &buffer, int64_t timestampNs) override;
     void pollForRenderedBuffers() override;
     void onBufferReleasedFromOutputSurface(uint32_t generation) override;
+    void onBufferAttachedToOutputSurface(uint32_t generation) override;
     status_t discardBuffer(const sp<MediaCodecBuffer> &buffer) override;
     void getInputBufferArray(Vector<sp<MediaCodecBuffer>> *array) override;
     void getOutputBufferArray(Vector<sp<MediaCodecBuffer>> *array) override;
@@ -390,7 +391,21 @@ private:
     };
     Mutexed<BlockPools> mBlockPools;
 
-    std::shared_ptr<InputSurfaceWrapper> mInputSurface;
+    std::atomic_bool mHasInputSurface;
+    struct InputSurface {
+        std::shared_ptr<InputSurfaceWrapper> surface;
+        // This variable tracks the number of buffers processing
+        // in the input surface and codec by counting the # of buffers to
+        // be filled in and queued from the input surface and the # of
+        // buffers generated from the codec.
+        //
+        // Note that this variable can go below 0, because it does not take
+        // account the number of buffers initially in the buffer queue at
+        // start. This is okay, as we only track how many more we allow
+        // from the initial state.
+        int64_t numProcessingBuffersBalance;
+    };
+    Mutexed<InputSurface> mInputSurface;
 
     MetaMode mMetaMode;
 

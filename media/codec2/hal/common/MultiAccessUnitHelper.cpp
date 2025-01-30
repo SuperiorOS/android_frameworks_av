@@ -327,10 +327,10 @@ c2_status_t MultiAccessUnitHelper::scatter(
                 newWork->worklets.front()->component = inWork->worklets.front()->component;
                 std::vector<std::unique_ptr<C2Tuning>> tunings;
                 for (std::unique_ptr<C2Tuning>& tuning : inWork->worklets.front()->tunings) {
-                    tunings.push_back(std::move(
+                    tunings.push_back(
                             std::unique_ptr<C2Tuning>(
                                     static_cast<C2Tuning*>(
-                                            C2Param::Copy(*(tuning.get())).release()))));
+                                            C2Param::Copy(*(tuning.get())).release())));
                 }
                 newWork->worklets.front()->tunings = std::move(tunings);
             }
@@ -344,7 +344,7 @@ c2_status_t MultiAccessUnitHelper::scatter(
                     << inputOrdinal.frameIndex.peekull()
                     << ") -> newFrameIndex " << newFrameIdx
                     <<" : input ts " << inputOrdinal.timestamp.peekull();
-            sliceWork.push_back(std::move(cloneInputWork(w, w->input.flags)));
+            sliceWork.push_back(cloneInputWork(w, w->input.flags));
             if (!w->input.buffers.empty() && w->input.buffers.front() != nullptr) {
                 sliceWork.back()->input.buffers = std::move(w->input.buffers);
             }

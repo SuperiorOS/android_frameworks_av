@@ -485,7 +485,7 @@ void Camera3BufferManager::dump(int fd, [[maybe_unused]] const Vector<String16>&
                     streamId, bufferCount);
         }
     }
-    std::string linesStr = std::move(lines.str());
+    std::string linesStr = lines.str();
     write(fd, linesStr.c_str(), linesStr.size());
 }
 

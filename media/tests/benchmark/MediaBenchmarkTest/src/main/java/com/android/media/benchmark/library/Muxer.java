@@ -23,6 +23,7 @@ import android.media.MediaMuxer;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.List;
 
 public class Muxer {
     private Stats mStats;
@@ -61,8 +62,8 @@ public class Muxer {
      * @param inputBufferInfo      Buffer information related to these samples
      * @return Returns Status as 0 if write operation is successful, -1 otherwise
      */
-    public int mux(int trackIndex, ArrayList<ByteBuffer> inputExtractedBuffer,
-                   ArrayList<MediaCodec.BufferInfo> inputBufferInfo) {
+    public int mux(int trackIndex, List<ByteBuffer> inputExtractedBuffer,
+                   List<MediaCodec.BufferInfo> inputBufferInfo) {
         mStats.setStartTime();
         for (int sampleCount = 0; sampleCount < inputExtractedBuffer.size(); sampleCount++) {
             try {

@@ -28,6 +28,7 @@
 #include <binder/Status.h>
 #include <camera/CameraUtils.h>
 #include <hidl/HidlTransportSupport.h>
+#include <utils/AttributionAndPermissionUtils.h>
 #include <utils/Utils.h>
 
 namespace android::frameworks::cameraservice::service::implementation {
@@ -89,10 +90,15 @@ ScopedAStatus AidlCameraService::getCameraCharacteristics(const std::string& in_
     if (_aidl_return == nullptr) { return fromSStatus(SStatus::ILLEGAL_ARGUMENT); }
 
     ::android::CameraMetadata cameraMetadata;
+    AttributionSourceState clientAttribution =
+            AttributionAndPermissionUtils::buildAttributionSource(
+                    hardware::ICameraService::USE_CALLING_PID,
+                    hardware::ICameraService::USE_CALLING_UID,
+                    kDefaultDeviceId);
     UStatus ret = mCameraService->getCameraCharacteristics(in_cameraId,
                                                            mVndkVersion,
                                                            ROTATION_OVERRIDE_NONE,
-                                                           kDefaultDeviceId,
+                                                           clientAttribution,
                                                            /* devicePolicy= */ 0,
                                                            &cameraMetadata);
     if (!ret.isOk()) {
@@ -143,16 +149,20 @@ ndk::ScopedAStatus AidlCameraService::connectDevice(
         return fromSStatus(SStatus::UNKNOWN_ERROR);
     }
     sp<hardware::camera2::ICameraDeviceCallbacks> callbacks = hybridCallbacks;
+    AttributionSourceState clientAttribution =
+            AttributionAndPermissionUtils::buildAttributionSource(
+                    hardware::ICameraService::USE_CALLING_PID,
+                    hardware::ICameraService::USE_CALLING_UID,
+                    kDefaultDeviceId);
+    clientAttribution.packageName = "";
+    clientAttribution.attributionTag = std::nullopt;
     binder::Status serviceRet = mCameraService->connectDevice(
             callbacks,
             in_cameraId,
-            std::string(),
-            /* clientFeatureId= */{},
-            hardware::ICameraService::USE_CALLING_UID,
             /* scoreOffset= */ 0,
             /* targetSdkVersion= */ __ANDROID_API_FUTURE__,
             ROTATION_OVERRIDE_NONE,
-            kDefaultDeviceId,
+            clientAttribution,
             /* devicePolicy= */ 0,
             &unstableDevice);
     if (!serviceRet.isOk()) {

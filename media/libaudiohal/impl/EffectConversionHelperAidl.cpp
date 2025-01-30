@@ -532,5 +532,13 @@ size_t EffectConversionHelperAidl::getHapticChannelCount() const {
                            AudioChannelLayout::LAYOUT_HAPTIC_AB /* mask */);
 }
 
+size_t EffectConversionHelperAidl::getInputChannelCount() const {
+    return getChannelCount(mCommon.input.base.channelMask);
+}
+
+size_t EffectConversionHelperAidl::getOutputChannelCount() const {
+    return getChannelCount(mCommon.output.base.channelMask);
+}
+
 }  // namespace effect
 }  // namespace android

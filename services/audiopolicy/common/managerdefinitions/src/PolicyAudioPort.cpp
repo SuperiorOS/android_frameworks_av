@@ -20,6 +20,7 @@
 #include "PolicyAudioPort.h"
 #include "HwModule.h"
 #include <policy.h>
+#include <system/audio.h>
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))

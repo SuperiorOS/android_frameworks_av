@@ -428,27 +428,6 @@ RetCode EffectBundleAidl::releaseContext() {
     return RetCode::SUCCESS;
 }
 
-ndk::ScopedAStatus EffectBundleAidl::commandImpl(CommandId command) {
-    RETURN_IF(!mContext, EX_NULL_POINTER, "nullContext");
-    switch (command) {
-        case CommandId::START:
-            mContext->enable();
-            break;
-        case CommandId::STOP:
-            mContext->disable();
-            break;
-        case CommandId::RESET:
-            mContext->disable();
-            mContext->resetBuffer();
-            break;
-        default:
-            LOG(ERROR) << __func__ << " commandId " << toString(command) << " not supported";
-            return ndk::ScopedAStatus::fromExceptionCodeWithMessage(EX_ILLEGAL_ARGUMENT,
-                                                                    "commandIdNotSupported");
-    }
-    return ndk::ScopedAStatus::ok();
-}
-
 // Processing method running in EffectWorker thread.
 IEffect::Status EffectBundleAidl::effectProcessImpl(float* in, float* out, int sampleToProcess) {
     IEffect::Status status = {EX_NULL_POINTER, 0, 0};

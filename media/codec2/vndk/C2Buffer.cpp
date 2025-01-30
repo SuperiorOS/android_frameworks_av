@@ -1311,8 +1311,7 @@ public:
                 for (size_t planeIx = 0; planeIx < mLayout.numPlanes; ++planeIx) {
                     const uint32_t colSampling = mLayout.planes[planeIx].colSampling;
                     const uint32_t rowSampling = mLayout.planes[planeIx].rowSampling;
-                    if (crop.left % colSampling || crop.right() % colSampling
-                            || crop.top % rowSampling || crop.bottom() % rowSampling) {
+                    if (crop.left % colSampling || crop.top % rowSampling) {
                         // cannot calculate data pointer
                         mImpl->getAllocation()->unmap(mData, crop, nullptr);
                         memset(&mLayout, 0, sizeof(mLayout));

@@ -76,6 +76,8 @@ using media::audio::common::AudioMode;
 using media::audio::common::AudioOffloadInfo;
 using media::audio::common::AudioOutputFlags;
 using media::audio::common::AudioPlaybackRate;
+using media::audio::common::AudioPolicyForcedConfig;
+using media::audio::common::AudioPolicyForceUse;
 using media::audio::common::AudioPort;
 using media::audio::common::AudioPortConfig;
 using media::audio::common::AudioPortDeviceExt;
@@ -3299,6 +3301,138 @@ legacy2aidl_audio_microphone_characteristic_t_MicrophoneInfos(
                         legacy.channel_mapping[i]));
     }
     return OK;
+}
+
+ConversionResult<audio_policy_force_use_t>
+aidl2legacy_AudioPolicyForceUse_audio_policy_force_use_t(AudioPolicyForceUse aidl) {
+    switch (aidl) {
+        case AudioPolicyForceUse::COMMUNICATION:
+            return AUDIO_POLICY_FORCE_FOR_COMMUNICATION;
+        case AudioPolicyForceUse::MEDIA:
+            return AUDIO_POLICY_FORCE_FOR_MEDIA;
+        case AudioPolicyForceUse::RECORD:
+            return AUDIO_POLICY_FORCE_FOR_RECORD;
+        case AudioPolicyForceUse::DOCK:
+            return AUDIO_POLICY_FORCE_FOR_DOCK;
+        case AudioPolicyForceUse::SYSTEM:
+            return AUDIO_POLICY_FORCE_FOR_SYSTEM;
+        case AudioPolicyForceUse::HDMI_SYSTEM_AUDIO:
+            return AUDIO_POLICY_FORCE_FOR_HDMI_SYSTEM_AUDIO;
+        case AudioPolicyForceUse::ENCODED_SURROUND:
+            return AUDIO_POLICY_FORCE_FOR_ENCODED_SURROUND;
+        case AudioPolicyForceUse::VIBRATE_RINGING:
+            return AUDIO_POLICY_FORCE_FOR_VIBRATE_RINGING;
+    }
+    return unexpected(BAD_VALUE);
+}
+
+ConversionResult<AudioPolicyForceUse>
+legacy2aidl_audio_policy_force_use_t_AudioPolicyForceUse(audio_policy_force_use_t legacy) {
+    switch (legacy) {
+        case AUDIO_POLICY_FORCE_FOR_COMMUNICATION:
+            return AudioPolicyForceUse::COMMUNICATION;
+        case AUDIO_POLICY_FORCE_FOR_MEDIA:
+            return AudioPolicyForceUse::MEDIA;
+        case AUDIO_POLICY_FORCE_FOR_RECORD:
+            return AudioPolicyForceUse::RECORD;
+        case AUDIO_POLICY_FORCE_FOR_DOCK:
+            return AudioPolicyForceUse::DOCK;
+        case AUDIO_POLICY_FORCE_FOR_SYSTEM:
+            return AudioPolicyForceUse::SYSTEM;
+        case AUDIO_POLICY_FORCE_FOR_HDMI_SYSTEM_AUDIO:
+            return AudioPolicyForceUse::HDMI_SYSTEM_AUDIO;
+        case AUDIO_POLICY_FORCE_FOR_ENCODED_SURROUND:
+            return AudioPolicyForceUse::ENCODED_SURROUND;
+        case AUDIO_POLICY_FORCE_FOR_VIBRATE_RINGING:
+            return AudioPolicyForceUse::VIBRATE_RINGING;
+        case AUDIO_POLICY_FORCE_USE_CNT:
+            break;
+    }
+    return unexpected(BAD_VALUE);
+}
+
+ConversionResult<audio_policy_forced_cfg_t>
+aidl2legacy_AudioPolicyForcedConfig_audio_policy_forced_cfg_t(AudioPolicyForcedConfig aidl) {
+    switch (aidl) {
+        case AudioPolicyForcedConfig::NONE:
+            return AUDIO_POLICY_FORCE_NONE;
+        case AudioPolicyForcedConfig::SPEAKER:
+            return AUDIO_POLICY_FORCE_SPEAKER;
+        case AudioPolicyForcedConfig::HEADPHONES:
+            return AUDIO_POLICY_FORCE_HEADPHONES;
+        case AudioPolicyForcedConfig::BT_SCO:
+            return AUDIO_POLICY_FORCE_BT_SCO;
+        case AudioPolicyForcedConfig::BT_A2DP:
+            return AUDIO_POLICY_FORCE_BT_A2DP;
+        case AudioPolicyForcedConfig::WIRED_ACCESSORY:
+            return AUDIO_POLICY_FORCE_WIRED_ACCESSORY;
+        case AudioPolicyForcedConfig::BT_CAR_DOCK:
+            return AUDIO_POLICY_FORCE_BT_CAR_DOCK;
+        case AudioPolicyForcedConfig::BT_DESK_DOCK:
+            return AUDIO_POLICY_FORCE_BT_DESK_DOCK;
+        case AudioPolicyForcedConfig::ANALOG_DOCK:
+            return AUDIO_POLICY_FORCE_ANALOG_DOCK;
+        case AudioPolicyForcedConfig::DIGITAL_DOCK:
+            return AUDIO_POLICY_FORCE_DIGITAL_DOCK;
+        case AudioPolicyForcedConfig::NO_BT_A2DP:
+            return AUDIO_POLICY_FORCE_NO_BT_A2DP;
+        case AudioPolicyForcedConfig::SYSTEM_ENFORCED:
+            return AUDIO_POLICY_FORCE_SYSTEM_ENFORCED;
+        case AudioPolicyForcedConfig::HDMI_SYSTEM_AUDIO_ENFORCED:
+            return AUDIO_POLICY_FORCE_HDMI_SYSTEM_AUDIO_ENFORCED;
+        case AudioPolicyForcedConfig::ENCODED_SURROUND_NEVER:
+            return AUDIO_POLICY_FORCE_ENCODED_SURROUND_NEVER;
+        case AudioPolicyForcedConfig::ENCODED_SURROUND_ALWAYS:
+            return AUDIO_POLICY_FORCE_ENCODED_SURROUND_ALWAYS;
+        case AudioPolicyForcedConfig::ENCODED_SURROUND_MANUAL:
+            return AUDIO_POLICY_FORCE_ENCODED_SURROUND_MANUAL;
+        case AudioPolicyForcedConfig::BT_BLE:
+            return AUDIO_POLICY_FORCE_BT_BLE;
+    }
+    return unexpected(BAD_VALUE);
+}
+
+ConversionResult<AudioPolicyForcedConfig>
+legacy2aidl_audio_policy_forced_cfg_t_AudioPolicyForcedConfig(audio_policy_forced_cfg_t legacy) {
+    switch (legacy) {
+        case AUDIO_POLICY_FORCE_NONE:
+            return AudioPolicyForcedConfig::NONE;
+        case AUDIO_POLICY_FORCE_SPEAKER:
+            return AudioPolicyForcedConfig::SPEAKER;
+        case AUDIO_POLICY_FORCE_HEADPHONES:
+            return AudioPolicyForcedConfig::HEADPHONES;
+        case AUDIO_POLICY_FORCE_BT_SCO:
+            return AudioPolicyForcedConfig::BT_SCO;
+        case AUDIO_POLICY_FORCE_BT_A2DP:
+            return AudioPolicyForcedConfig::BT_A2DP;
+        case AUDIO_POLICY_FORCE_WIRED_ACCESSORY:
+            return AudioPolicyForcedConfig::WIRED_ACCESSORY;
+        case AUDIO_POLICY_FORCE_BT_CAR_DOCK:
+            return AudioPolicyForcedConfig::BT_CAR_DOCK;
+        case AUDIO_POLICY_FORCE_BT_DESK_DOCK:
+            return AudioPolicyForcedConfig::BT_DESK_DOCK;
+        case AUDIO_POLICY_FORCE_ANALOG_DOCK:
+            return AudioPolicyForcedConfig::ANALOG_DOCK;
+        case AUDIO_POLICY_FORCE_DIGITAL_DOCK:
+            return AudioPolicyForcedConfig::DIGITAL_DOCK;
+        case AUDIO_POLICY_FORCE_NO_BT_A2DP:
+            return AudioPolicyForcedConfig::NO_BT_A2DP;
+        case AUDIO_POLICY_FORCE_SYSTEM_ENFORCED:
+            return AudioPolicyForcedConfig::SYSTEM_ENFORCED;
+        case AUDIO_POLICY_FORCE_HDMI_SYSTEM_AUDIO_ENFORCED:
+            return AudioPolicyForcedConfig::HDMI_SYSTEM_AUDIO_ENFORCED;
+        case AUDIO_POLICY_FORCE_ENCODED_SURROUND_NEVER:
+            return AudioPolicyForcedConfig::ENCODED_SURROUND_NEVER;
+        case AUDIO_POLICY_FORCE_ENCODED_SURROUND_ALWAYS:
+            return AudioPolicyForcedConfig::ENCODED_SURROUND_ALWAYS;
+        case AUDIO_POLICY_FORCE_ENCODED_SURROUND_MANUAL:
+            return AudioPolicyForcedConfig::ENCODED_SURROUND_MANUAL;
+        case AUDIO_POLICY_FORCE_BT_BLE:
+            return AudioPolicyForcedConfig::BT_BLE;
+        case AUDIO_POLICY_FORCE_CFG_CNT:
+            break;
+    }
+    return unexpected(BAD_VALUE);
 }
 
 }  // namespace android

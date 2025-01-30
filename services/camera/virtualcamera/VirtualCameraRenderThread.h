@@ -18,6 +18,7 @@
 #define ANDROID_COMPANION_VIRTUALCAMERA_VIRTUALCAMERARENDERTHREAD_H
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <future>
@@ -26,6 +27,7 @@
 #include <variant>
 #include <vector>
 
+#include "VirtualCameraCaptureRequest.h"
 #include "VirtualCameraDevice.h"
 #include "VirtualCameraSessionContext.h"
 #include "aidl/android/hardware/camera/device/CameraMetadata.h"
@@ -54,19 +56,6 @@ class CaptureRequestBuffer {
   const int mStreamId;
   const int mBufferId;
   const sp<Fence> mFence;
-};
-
-struct RequestSettings {
-  int jpegQuality = VirtualCameraDevice::kDefaultJpegQuality;
-  int jpegOrientation = VirtualCameraDevice::kDefaultJpegOrientation;
-  Resolution thumbnailResolution = Resolution(0, 0);
-  int thumbnailJpegQuality = VirtualCameraDevice::kDefaultJpegQuality;
-  std::optional<FpsRange> fpsRange;
-  camera_metadata_enum_android_control_capture_intent_t captureIntent =
-      VirtualCameraDevice::kDefaultCaptureIntent;
-  std::optional<GpsCoordinates> gpsCoordinates;
-  std::optional<camera_metadata_enum_android_control_ae_precapture_trigger>
-      aePrecaptureTrigger;
 };
 
 // Represents single capture request to fill set of buffers.
@@ -200,6 +189,22 @@ class VirtualCameraRenderThread {
       EglFrameBuffer& framebuffer, sp<Fence> fence = nullptr,
       std::optional<Rect> viewport = std::nullopt);
 
+  // Throttle the current thread to ensure that we are not rendering faster than
+  // the provided maxFps.
+  // maxFps: The maximum fps in the capture request
+  // lastAcquisitionTimestamp: timestamp of the previous frame
+  // timestamp: the current capture time
+  // Returns the time at which the capture has happened after throttling.
+  std::chrono::nanoseconds throttleRendering(
+      int maxFps, std::chrono::nanoseconds lastAcquisitionTimestamp,
+      std::chrono::nanoseconds timestamp);
+
+  // Fetch the timestamp of the latest buffer from the EGL Surface
+  // timeSinceLastFrame: The elapsed time since the last captured frame.
+  // Return 0 if no timestamp has been associated to this surface by the producer.
+  std::chrono::nanoseconds getSurfaceTimestamp(
+      std::chrono::nanoseconds timeSinceLastFrame);
+
   // Camera callback
   const std::shared_ptr<
       ::aidl::android::hardware::camera::device::ICameraDeviceCallback>
@@ -221,6 +226,7 @@ class VirtualCameraRenderThread {
 
   // Acquisition timestamp of last frame.
   std::atomic<uint64_t> mLastAcquisitionTimestampNanoseconds;
+  std::atomic<uint64_t> mLastSurfaceTimestampNanoseconds;
 
   // EGL helpers - constructed and accessed only from rendering thread.
   std::unique_ptr<EglDisplayContext> mEglDisplayContext;

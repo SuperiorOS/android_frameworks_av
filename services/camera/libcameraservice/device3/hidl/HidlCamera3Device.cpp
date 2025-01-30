@@ -56,6 +56,7 @@
 #include "device3/hidl/HidlCamera3OfflineSession.h"
 #include "utils/SessionConfigurationUtilsHidl.h"
 #include "utils/TraceHFR.h"
+#include "utils/Utils.h"
 
 #include "../../common/hidl/HidlProviderInfo.h"
 #include "HidlCamera3Device.h"
@@ -302,7 +303,7 @@ status_t HidlCamera3Device::initialize(sp<CameraProviderManager> manager,
     }
     mNeedFixupMonochromeTags = (isMonochrome && deviceVersion < CAMERA_DEVICE_API_VERSION_3_5);
 
-    return initializeCommonLocked();
+    return initializeCommonLocked(manager);
 }
 
 hardware::Return<void> HidlCamera3Device::requestStreamBuffers(
@@ -881,7 +882,7 @@ bool HidlCamera3Device::HidlHalInterface::isReconfigurationRequired(
                     ret = true;
                     break;
                 default:
-                    ALOGV("%s: Reconfiguration query failed: %d", __FUNCTION__, callStatus);
+                    ALOGV("%s: Reconfiguration query failed: %d", __FUNCTION__, eToI(callStatus));
                     ret = true;
             }
         } else {

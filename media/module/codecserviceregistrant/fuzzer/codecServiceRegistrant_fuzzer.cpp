@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <codecserviceregistrant/CodecServiceRegistrant.h>
+
 #include "../CodecServiceRegistrant.cpp"
 #include "fuzzer/FuzzedDataProvider.h"
 #include <C2Config.h>
@@ -166,9 +169,9 @@ void CodecServiceRegistrantFuzzer::invokeH2C2ComponentStore() {
 void CodecServiceRegistrantFuzzer::process(const uint8_t *data, size_t size) {
   mFDP = new FuzzedDataProvider(data, size);
   invokeH2C2ComponentStore();
-  /** RegisterCodecServices is called here to improve code coverage */
-  /** as currently it is not called by codecServiceRegistrant       */
-  RegisterCodecServices();
+  /** RegisterCodecServicesWithExistingThreadpool() is called here to improve
+   * code coverage as currently it is not called in codecServiceRegistrant.cpp */
+  RegisterCodecServicesWithExistingThreadpool();
   delete mFDP;
 }
 

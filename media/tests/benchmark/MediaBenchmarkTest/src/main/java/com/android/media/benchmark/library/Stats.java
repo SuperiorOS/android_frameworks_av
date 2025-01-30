@@ -23,6 +23,7 @@ import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Measures Performance.
@@ -88,9 +89,9 @@ public class Stats {
 
     public long getStartTime() { return mStartTimeNs; }
 
-    public ArrayList<Long> getOutputTimers() { return mOutputTimer; }
+    public List<Long> getOutputTimers() { return mOutputTimer; }
 
-    public ArrayList<Long> getInputTimers() { return mInputTimer; }
+    public List<Long> getInputTimers() { return mInputTimer; }
 
     public long getTimeDiff(long sTime, long eTime) { return (eTime - sTime); }
 

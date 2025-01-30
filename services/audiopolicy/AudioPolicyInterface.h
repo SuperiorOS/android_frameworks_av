@@ -147,7 +147,8 @@ public:
                                       std::vector<audio_io_handle_t> *secondaryOutputs,
                                       output_type_t *outputType,
                                       bool *isSpatialized,
-                                      bool *isBitPerfect) = 0;
+                                      bool *isBitPerfect,
+                                      float *volume) = 0;
     // indicates to the audio policy manager that the output starts being used by corresponding
     // stream.
     virtual status_t startOutput(audio_port_handle_t portId) = 0;
@@ -477,7 +478,8 @@ public:
                                 audio_config_base_t *mixerConfig,
                                 const sp<DeviceDescriptorBase>& device,
                                 uint32_t *latencyMs,
-                                audio_output_flags_t flags) = 0;
+                                audio_output_flags_t flags,
+                                audio_attributes_t audioAttributes) = 0;
     // creates a special output that is duplicated to the two outputs passed as arguments.
     // The duplication is performed by a special mixer thread in the AudioFlinger.
     virtual audio_io_handle_t openDuplicateOutput(audio_io_handle_t output1,
@@ -514,6 +516,18 @@ public:
     // for each output (destination device) it is attached to.
     virtual status_t setStreamVolume(audio_stream_type_t stream, float volume,
                                      audio_io_handle_t output, int delayMs = 0) = 0;
+    /**
+     * Set volume for given AudioTrack port ids for a particular output.
+     * For the same user setting, a given volume group and associated output port id
+     * can have different volumes for each output (destination device) it is attached to.
+     * @param ports to consider
+     * @param volume to apply
+     * @param output to consider
+     * @param delayMs to use
+     * @return NO_ERROR if successful
+     */
+    virtual status_t setPortsVolume(const std::vector<audio_port_handle_t>& ports, float volume,
+            audio_io_handle_t output, int delayMs = 0) = 0;
 
     // function enabling to send proprietary informations directly from audio policy manager to
     // audio hardware interface.

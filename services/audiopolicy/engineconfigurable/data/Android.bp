@@ -1,0 +1,97 @@
+/*
+ * Copyright (C) 2024 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package {
+    // See: http://go/android-license-faq
+    // A large-scale-change added 'default_applicable_licenses' to import
+    // all of the 'license_kinds' from "frameworks_av_license"
+    // to get the below license kinds:
+    //   SPDX-license-identifier-Apache-2.0
+    default_applicable_licenses: ["frameworks_av_license"],
+}
+
+prebuilt_etc {
+    name: "CapClass.xml",
+    src: ":CapClass",
+    sub_dir: "parameter-framework/Structure/Policy",
+}
+
+prebuilt_etc {
+    name: "CapSubsystem.xml",
+    src: ":CapSubsystem",
+    sub_dir: "parameter-framework/Structure/Policy",
+}
+
+prebuilt_etc {
+    name: "CapSubsystem-CommonTypes.xml",
+    src: ":buildaidlcommontypesstructure_gen",
+    sub_dir: "parameter-framework/Structure/Policy",
+}
+
+prebuilt_etc {
+    name: "CapProductStrategies.xml",
+    src: ":cap_product_strategies_structure",
+    sub_dir: "parameter-framework/Structure/Policy",
+}
+
+prebuilt_etc {
+    name: "ParameterFrameworkConfigurationCap.xml",
+    src: ":ParameterFrameworkConfigurationCapSrc_gen",
+    sub_dir: "parameter-framework",
+}
+
+genrule {
+    name: "ParameterFrameworkConfigurationCapSrc_gen",
+    out: ["ParameterFrameworkConfigurationCap.xml"],
+    srcs: [":ParameterFrameworkConfigurationCapSrc"],
+    product_variables: {
+        debuggable: {
+            cmd: "sed -e 's|TuningAllowed=\"false\"|TuningAllowed=\"true\" ServerPort=\"unix:///dev/socket/audioserver/policy_debug\"|g' <$(in) > $(out)",
+        },
+    },
+    cmd: "cp -f $(in) $(out)",
+}
+
+genrule {
+    name: "buildaidlcommontypesstructure_gen",
+    defaults: ["buildcommontypesstructurerule"],
+    out: ["CapSubsystem-CommonTypes.xml"],
+}
+
+filegroup {
+    name: "ParameterFrameworkConfigurationCapSrc",
+    srcs: ["etc/ParameterFrameworkConfigurationCap.xml"],
+}
+
+filegroup {
+    name: "cap_product_strategies_structure",
+    srcs: ["etc/Structure/CapProductStrategies.xml"],
+}
+
+filegroup {
+    name: "CapSubsystem",
+    srcs: ["etc/Structure/CapSubsystem.xml"],
+}
+
+filegroup {
+    name: "aidl_common_types_structure_template",
+    srcs: ["etc/Structure/CapSubsystem-CommonTypes.xml.in"],
+}
+
+filegroup {
+    name: "CapClass",
+    srcs: ["etc/Structure/CapClass.xml"],
+}

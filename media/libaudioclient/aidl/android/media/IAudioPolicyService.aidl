@@ -25,8 +25,6 @@ import android.media.AudioMixerAttributesInternal;
 import android.media.AudioOffloadMode;
 import android.media.AudioPatchFw;
 import android.media.AudioPolicyDeviceState;
-import android.media.AudioPolicyForcedConfig;
-import android.media.AudioPolicyForceUse;
 import android.media.AudioPortFw;
 import android.media.AudioPortConfigFw;
 import android.media.AudioPortRole;
@@ -49,6 +47,8 @@ import android.media.audio.common.AudioDevice;
 import android.media.audio.common.AudioDeviceDescription;
 import android.media.audio.common.AudioFormatDescription;
 import android.media.audio.common.AudioMode;
+import android.media.audio.common.AudioPolicyForcedConfig;
+import android.media.audio.common.AudioPolicyForceUse;
 import android.media.audio.common.AudioProfile;
 import android.media.audio.common.AudioOffloadInfo;
 import android.media.audio.common.AudioPort;
@@ -116,9 +116,9 @@ interface IAudioPolicyService {
 
     void releaseInput(int /* audio_port_handle_t */ portId);
 
-    oneway void setDeviceAbsoluteVolumeEnabled(in AudioDevice device,
-                                               boolean enabled,
-                                               AudioStreamType streamToDriveAbs);
+    void setDeviceAbsoluteVolumeEnabled(in AudioDevice device,
+                                        boolean enabled,
+                                        AudioStreamType streamToDriveAbs);
 
     void initStreamVolume(AudioStreamType stream,
                           int indexMin,

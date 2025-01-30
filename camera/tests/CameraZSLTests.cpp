@@ -19,6 +19,7 @@
 
 #include <gtest/gtest.h>
 
+#include <android/content/AttributionSourceState.h>
 #include <binder/ProcessState.h>
 #include <utils/Errors.h>
 #include <utils/Log.h>
@@ -84,8 +85,10 @@ void CameraZSLTests::SetUp() {
     sp<IServiceManager> sm = defaultServiceManager();
     sp<IBinder> binder = sm->getService(String16("media.camera"));
     mCameraService = interface_cast<ICameraService>(binder);
+    AttributionSourceState clientAttribution;
+    clientAttribution.deviceId = kDefaultDeviceId;
     rc = mCameraService->getNumberOfCameras(
-            hardware::ICameraService::CAMERA_TYPE_ALL, kDefaultDeviceId, /*devicePolicy*/0,
+            hardware::ICameraService::CAMERA_TYPE_ALL, clientAttribution, /*devicePolicy*/0,
             &numCameras);
     EXPECT_TRUE(rc.isOk());
 
@@ -183,9 +186,11 @@ TEST_F(CameraZSLTests, TestAllPictureSizes) {
         }
 
         CameraMetadata metadata;
+        AttributionSourceState clientAttribution;
+        clientAttribution.deviceId = kDefaultDeviceId;
         rc = mCameraService->getCameraCharacteristics(cameraIdStr,
                 /*targetSdkVersion*/__ANDROID_API_FUTURE__, /*overrideToPortrait*/false,
-                kDefaultDeviceId, /*devicePolicy*/0, &metadata);
+                clientAttribution, /*devicePolicy*/0, &metadata);
         if (!rc.isOk()) {
             // The test is relevant only for cameras with Hal 3.x
             // support.
@@ -209,11 +214,12 @@ TEST_F(CameraZSLTests, TestAllPictureSizes) {
             continue;
         }
 
+        clientAttribution.uid = hardware::ICameraService::USE_CALLING_UID;
+        clientAttribution.pid = hardware::ICameraService::USE_CALLING_PID;
+        clientAttribution.packageName = "ZSLTest";
         rc = mCameraService->connect(this, cameraId,
-                "ZSLTest", hardware::ICameraService::USE_CALLING_UID,
-                hardware::ICameraService::USE_CALLING_PID,
                 /*targetSdkVersion*/__ANDROID_API_FUTURE__,
-                /*overrideToPortrait*/false, /*forceSlowJpegMode*/false, kDefaultDeviceId,
+                /*overrideToPortrait*/false, /*forceSlowJpegMode*/false, clientAttribution,
                 /*devicePolicy*/0, &cameraDevice);
         EXPECT_TRUE(rc.isOk());
 

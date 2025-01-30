@@ -29,6 +29,9 @@
 #include "ui/GraphicBufferMapper.h"
 
 #include <cutils/properties.h>
+#include <com_android_internal_camera_flags.h>
+
+namespace flags = com::android::internal::camera::flags;
 
 namespace android {
 
@@ -388,6 +391,10 @@ status_t Camera3Stream::finishConfiguration(/*out*/bool* streamReconfigured) {
             mOldDataSpace == camera_stream::data_space &&
             mOldFormat == camera_stream::format) {
         mState = STATE_CONFIGURED;
+        if (flags::enable_stream_reconfiguration_for_unchanged_streams()
+                && streamReconfigured != nullptr) {
+            *streamReconfigured = true;
+        }
         return OK;
     }
 
@@ -864,12 +871,21 @@ status_t Camera3Stream::returnInputBuffer(const camera_stream_buffer &buffer) {
     return res;
 }
 
+#if WB_CAMERA3_AND_PROCESSORS_WITH_DEPENDENCIES
+status_t Camera3Stream::getInputSurface(sp<Surface> *surface) {
+    ATRACE_CALL();
+    Mutex::Autolock l(mLock);
+
+    return getInputSurfaceLocked(surface);
+}
+#else
 status_t Camera3Stream::getInputBufferProducer(sp<IGraphicBufferProducer> *producer) {
     ATRACE_CALL();
     Mutex::Autolock l(mLock);
 
     return getInputBufferProducerLocked(producer);
 }
+#endif
 
 void Camera3Stream::fireBufferRequestForFrameNumber(uint64_t frameNumber,
         const CameraMetadata& settings) {
@@ -983,10 +999,17 @@ status_t Camera3Stream::returnInputBufferLocked(
     ALOGE("%s: This type of stream does not support input", __FUNCTION__);
     return INVALID_OPERATION;
 }
+#if WB_CAMERA3_AND_PROCESSORS_WITH_DEPENDENCIES
+status_t Camera3Stream::getInputSurfaceLocked(sp<Surface>*) {
+    ALOGE("%s: This type of stream does not support input", __FUNCTION__);
+    return INVALID_OPERATION;
+}
+#else
 status_t Camera3Stream::getInputBufferProducerLocked(sp<IGraphicBufferProducer>*) {
     ALOGE("%s: This type of stream does not support input", __FUNCTION__);
     return INVALID_OPERATION;
 }
+#endif
 
 void Camera3Stream::addBufferListener(
         wp<Camera3StreamBufferListener> listener) {

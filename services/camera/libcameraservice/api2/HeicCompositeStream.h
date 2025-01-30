@@ -19,7 +19,6 @@
 
 #include <queue>
 
-#include <gui/IProducerListener.h>
 #include <gui/CpuConsumer.h>
 
 #include <media/hardware/VideoAPI.h>
@@ -234,10 +233,10 @@ private:
     bool              mYuvBufferAcquired; // Only applicable to HEVC codec
     std::queue<int64_t> mMainImageFrameNumbers;
 
-    static const int32_t kMaxOutputSurfaceProducerCount = 1;
-    sp<Surface>       mOutputSurface;
-    sp<ProducerListener> mProducerListener;
-    int32_t           mDequeuedOutputBufferCnt;
+    static const int32_t        kMaxOutputSurfaceProducerCount = 1;
+    sp<Surface>                 mOutputSurface;
+    sp<StreamSurfaceListener>   mStreamSurfaceListener;
+    int32_t                     mDequeuedOutputBufferCnt;
 
     // Map from frame number to JPEG setting of orientation+quality
     struct HeicSettings {

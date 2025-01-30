@@ -237,3 +237,11 @@ cc_test {
         "shared_memory_allocator_tests.cpp",
     ],
 }
+
+cc_test {
+    name: "jthread_tests",
+    defaults: ["libmediautils_tests_defaults"],
+    srcs: [
+        "jthread_tests.cpp",
+    ],
+}

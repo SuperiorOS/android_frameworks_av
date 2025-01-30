@@ -35,9 +35,9 @@ class BundleContext final : public EffectContext {
     void deInit();
     lvm::BundleEffectType getBundleType() const { return mType; }
 
-    RetCode enable();
+    RetCode enable() override;
     RetCode enableOperatingMode();
-    RetCode disable();
+    RetCode disable() override;
     RetCode disableOperatingMode();
 
     bool isDeviceSupportedBassBoost(

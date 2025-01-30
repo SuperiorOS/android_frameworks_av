@@ -129,6 +129,8 @@ public:
 
     product_strategy_t getProductStrategyByName(const std::string &name) const;
 
+    std::string getProductStrategyName(product_strategy_t id) const;
+
     AudioPolicyManagerObserver *getApmObserver() const { return mApmObserver; }
 
     inline bool isInCall() const

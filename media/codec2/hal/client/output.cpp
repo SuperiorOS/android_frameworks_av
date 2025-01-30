@@ -261,6 +261,7 @@ bool OutputBufferQueue::configure(const sp<IGraphicBufferProducer>& igbp,
         mGeneration = generation;
         mBqId = bqId;
         mOwner = std::make_shared<int>(0);
+        mConsumerAttachCount = std::make_shared<int>(0);
         mMaxDequeueBufferCount = maxDequeueBufferCount;
         if (igbp == nullptr) {
             return false;
@@ -522,6 +523,7 @@ void OutputBufferQueue::onBufferReleased(uint32_t generation) {
     std::shared_ptr<C2SurfaceSyncMemory> syncMem;
     sp<IGraphicBufferProducer> outputIgbp;
     uint32_t outputGeneration = 0;
+    std::shared_ptr<int> consumerAttachCount;
     {
         std::unique_lock<std::mutex> l(mMutex);
         if (mStopped) {
@@ -529,6 +531,7 @@ void OutputBufferQueue::onBufferReleased(uint32_t generation) {
         }
         outputIgbp = mIgbp;
         outputGeneration = mGeneration;
+        consumerAttachCount = mConsumerAttachCount;
         syncMem = mSyncMem;
     }
 
@@ -536,7 +539,39 @@ void OutputBufferQueue::onBufferReleased(uint32_t generation) {
         auto syncVar = syncMem ? syncMem->mem() : nullptr;
         if (syncVar) {
             syncVar->lock();
-            syncVar->notifyQueuedLocked();
+            if (consumerAttachCount && *consumerAttachCount > 0) {
+                (*consumerAttachCount)--;
+            } else {
+                syncVar->notifyQueuedLocked();
+            }
+            syncVar->unlock();
+        }
+    }
+}
+
+void OutputBufferQueue::onBufferAttached(uint32_t generation) {
+    std::shared_ptr<C2SurfaceSyncMemory> syncMem;
+    sp<IGraphicBufferProducer> outputIgbp;
+    uint32_t outputGeneration = 0;
+    std::shared_ptr<int> consumerAttachCount;
+    {
+        std::unique_lock<std::mutex> l(mMutex);
+        if (mStopped) {
+            return;
+        }
+        outputIgbp = mIgbp;
+        outputGeneration = mGeneration;
+        consumerAttachCount = mConsumerAttachCount;
+        syncMem = mSyncMem;
+    }
+
+    if (outputIgbp && generation == outputGeneration) {
+        auto syncVar = syncMem ? syncMem->mem() : nullptr;
+        if (syncVar) {
+            syncVar->lock();
+            if (consumerAttachCount) {
+                (*consumerAttachCount)++;
+            }
             syncVar->unlock();
         }
     }

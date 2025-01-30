@@ -23,6 +23,9 @@
 
 #include <android/content/AttributionSourceState.h>
 #include <android_media_audiopolicy.h>
+#include <com_android_media_audio.h>
+#include <cutils/properties.h>
+#include <error/expected_utils.h>
 #include <media/AidlConversion.h>
 #include <media/AudioPolicy.h>
 #include <media/AudioValidator.h>
@@ -44,13 +47,30 @@
         if (!_tmp.isOk()) return _tmp; \
     }
 
+#define CHECK_PERM(expr1, expr2) \
+    VALUE_OR_RETURN_STATUS(getPermissionProvider().checkPermission((expr1), (expr2)))
+
 #define MAX_ITEMS_PER_LIST 1024
 
 namespace android {
 namespace audiopolicy_flags = android::media::audiopolicy;
 using binder::Status;
 using aidl_utils::binderStatusFromStatusT;
+using com::android::media::audio::audioserver_permissions;
 using com::android::media::permission::NativePermissionController;
+using com::android::media::permission::PermissionEnum::ACCESS_ULTRASOUND;
+using com::android::media::permission::PermissionEnum::CALL_AUDIO_INTERCEPTION;
+using com::android::media::permission::PermissionEnum::CAPTURE_AUDIO_HOTWORD;
+using com::android::media::permission::PermissionEnum::CAPTURE_VOICE_COMMUNICATION_OUTPUT;
+using com::android::media::permission::PermissionEnum::CAPTURE_AUDIO_OUTPUT;
+using com::android::media::permission::PermissionEnum::CAPTURE_MEDIA_OUTPUT;
+using com::android::media::permission::PermissionEnum::CAPTURE_TUNER_AUDIO_INPUT;
+using com::android::media::permission::PermissionEnum::MODIFY_AUDIO_ROUTING;
+using com::android::media::permission::PermissionEnum::MODIFY_AUDIO_SETTINGS;
+using com::android::media::permission::PermissionEnum::MODIFY_DEFAULT_AUDIO_EFFECTS;
+using com::android::media::permission::PermissionEnum::MODIFY_PHONE_STATE;
+using com::android::media::permission::PermissionEnum::RECORD_AUDIO;
+using com::android::media::permission::PermissionEnum::WRITE_SECURE_SETTINGS;
 using content::AttributionSourceState;
 using media::audio::common::AudioConfig;
 using media::audio::common::AudioConfigBase;
@@ -60,6 +80,8 @@ using media::audio::common::AudioDeviceDescription;
 using media::audio::common::AudioFormatDescription;
 using media::audio::common::AudioMode;
 using media::audio::common::AudioOffloadInfo;
+using media::audio::common::AudioPolicyForceUse;
+using media::audio::common::AudioPolicyForcedConfig;
 using media::audio::common::AudioSource;
 using media::audio::common::AudioStreamType;
 using media::audio::common::AudioUsage;
@@ -67,6 +89,10 @@ using media::audio::common::AudioUuid;
 using media::audio::common::Int;
 
 constexpr int kDefaultVirtualDeviceId = 0;
+namespace {
+constexpr auto PERMISSION_HARD_DENIED = permission::PermissionChecker::PERMISSION_HARD_DENIED;
+constexpr auto PERMISSION_GRANTED = permission::PermissionChecker::PERMISSION_GRANTED;
+}
 
 const std::vector<audio_usage_t>& SYSTEM_USAGES = {
     AUDIO_USAGE_CALL_ASSISTANT,
@@ -86,31 +112,37 @@ bool AudioPolicyService::isSupportedSystemUsage(audio_usage_t usage) {
         != std::end(mSupportedSystemUsages);
 }
 
-status_t AudioPolicyService::validateUsage(const audio_attributes_t& attr) {
+Status AudioPolicyService::validateUsage(const audio_attributes_t& attr) {
      return validateUsage(attr, getCallingAttributionSource());
 }
 
-status_t AudioPolicyService::validateUsage(const audio_attributes_t& attr,
+Status AudioPolicyService::validateUsage(const audio_attributes_t& attr,
         const AttributionSourceState& attributionSource) {
     if (isSystemUsage(attr.usage)) {
         if (isSupportedSystemUsage(attr.usage)) {
             if (attr.usage == AUDIO_USAGE_CALL_ASSISTANT
                     && ((attr.flags & AUDIO_FLAG_CALL_REDIRECTION) != 0)) {
-                if (!callAudioInterceptionAllowed(attributionSource)) {
+                if (!(audioserver_permissions() ?
+                            CHECK_PERM(CALL_AUDIO_INTERCEPTION, attributionSource.uid)
+                            : callAudioInterceptionAllowed(attributionSource))) {
                     ALOGE("%s: call audio interception not allowed for attribution source: %s",
                            __func__, attributionSource.toString().c_str());
-                    return PERMISSION_DENIED;
+                    return Status::fromExceptionCode(Status::EX_SECURITY,
+                            "Call audio interception not allowed");
                 }
-            } else if (!modifyAudioRoutingAllowed(attributionSource)) {
+            } else if (!(audioserver_permissions() ?
+                        CHECK_PERM(MODIFY_AUDIO_ROUTING, attributionSource.uid)
+                        : modifyAudioRoutingAllowed(attributionSource))) {
                 ALOGE("%s: modify audio routing not allowed for attribution source: %s",
                         __func__, attributionSource.toString().c_str());
-                return PERMISSION_DENIED;
+                    return Status::fromExceptionCode(Status::EX_SECURITY,
+                            "Modify audio routing not allowed");
             }
         } else {
-            return BAD_VALUE;
+            return Status::fromExceptionCode(Status::EX_ILLEGAL_ARGUMENT);
         }
     }
-    return NO_ERROR;
+    return Status::ok();
 }
 
 
@@ -137,7 +169,9 @@ Status AudioPolicyService::setDeviceConnectionState(
     if (mAudioPolicyManager == NULL) {
         return binderStatusFromStatusT(NO_INIT);
     }
-    if (!settingsAllowed()) {
+    if (!(audioserver_permissions() ?
+            CHECK_PERM(MODIFY_AUDIO_SETTINGS, IPCThreadState::self()->getCallingUid())
+            : settingsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     if (state != AUDIO_POLICY_DEVICE_STATE_AVAILABLE &&
@@ -191,7 +225,9 @@ Status AudioPolicyService::handleDeviceConfigChange(
     if (mAudioPolicyManager == NULL) {
         return binderStatusFromStatusT(NO_INIT);
     }
-    if (!settingsAllowed()) {
+    if (!(audioserver_permissions() ?
+            CHECK_PERM(MODIFY_AUDIO_SETTINGS, IPCThreadState::self()->getCallingUid())
+            : settingsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
 
@@ -215,7 +251,9 @@ Status AudioPolicyService::setPhoneState(AudioMode stateAidl, int32_t uidAidl)
     if (mAudioPolicyManager == NULL) {
         return binderStatusFromStatusT(NO_INIT);
     }
-    if (!settingsAllowed()) {
+    if (!(audioserver_permissions() ?
+            CHECK_PERM(MODIFY_AUDIO_SETTINGS, IPCThreadState::self()->getCallingUid())
+            : settingsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     if (uint32_t(state) >= AUDIO_MODE_CNT) {
@@ -253,8 +291,8 @@ Status AudioPolicyService::getPhoneState(AudioMode* _aidl_return) {
     return Status::ok();
 }
 
-Status AudioPolicyService::setForceUse(media::AudioPolicyForceUse usageAidl,
-                                       media::AudioPolicyForcedConfig configAidl)
+Status AudioPolicyService::setForceUse(AudioPolicyForceUse usageAidl,
+                                       AudioPolicyForcedConfig configAidl)
 {
     audio_policy_force_use_t usage = VALUE_OR_RETURN_BINDER_STATUS(
             aidl2legacy_AudioPolicyForceUse_audio_policy_force_use_t(usageAidl));
@@ -265,7 +303,9 @@ Status AudioPolicyService::setForceUse(media::AudioPolicyForceUse usageAidl,
         return binderStatusFromStatusT(NO_INIT);
     }
 
-    if (!modifyAudioRoutingAllowed()) {
+    if (!(audioserver_permissions() ?
+            CHECK_PERM(MODIFY_AUDIO_ROUTING, IPCThreadState::self()->getCallingUid())
+            : modifyAudioRoutingAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
 
@@ -283,8 +323,8 @@ Status AudioPolicyService::setForceUse(media::AudioPolicyForceUse usageAidl,
     return Status::ok();
 }
 
-Status AudioPolicyService::getForceUse(media::AudioPolicyForceUse usageAidl,
-                                       media::AudioPolicyForcedConfig* _aidl_return) {
+Status AudioPolicyService::getForceUse(AudioPolicyForceUse usageAidl,
+                                       AudioPolicyForcedConfig* _aidl_return) {
     audio_policy_force_use_t usage = VALUE_OR_RETURN_BINDER_STATUS(
             aidl2legacy_AudioPolicyForceUse_audio_policy_force_use_t(usageAidl));
 
@@ -355,7 +395,7 @@ Status AudioPolicyService::getOutputForAttr(const media::audio::common::AudioAtt
 
     RETURN_IF_BINDER_ERROR(
             binderStatusFromStatusT(AudioValidator::validateAudioAttributes(attr, "68953950")));
-    RETURN_IF_BINDER_ERROR(binderStatusFromStatusT(validateUsage(attr, attributionSource)));
+    RETURN_IF_BINDER_ERROR(validateUsage(attr, attributionSource));
 
     ALOGV("%s()", __func__);
     audio_utils::lock_guard _l(mMutex);
@@ -364,14 +404,22 @@ Status AudioPolicyService::getOutputForAttr(const media::audio::common::AudioAtt
         aidl2legacy_int32_t_uid_t(attributionSource.uid)))) {
         attr.flags = static_cast<audio_flags_mask_t>(attr.flags | AUDIO_FLAG_NO_MEDIA_PROJECTION);
     }
+    const bool bypassInterruptionAllowed = audioserver_permissions() ? (
+            CHECK_PERM(MODIFY_AUDIO_ROUTING, attributionSource.uid) ||
+            CHECK_PERM(MODIFY_PHONE_STATE, attributionSource.uid) ||
+            CHECK_PERM(WRITE_SECURE_SETTINGS, attributionSource.uid))
+            : bypassInterruptionPolicyAllowed(attributionSource);
+
     if (((attr.flags & (AUDIO_FLAG_BYPASS_INTERRUPTION_POLICY|AUDIO_FLAG_BYPASS_MUTE)) != 0)
-            && !bypassInterruptionPolicyAllowed(attributionSource)) {
+            && !bypassInterruptionAllowed) {
         attr.flags = static_cast<audio_flags_mask_t>(
                 attr.flags & ~(AUDIO_FLAG_BYPASS_INTERRUPTION_POLICY|AUDIO_FLAG_BYPASS_MUTE));
     }
 
     if (attr.content_type == AUDIO_CONTENT_TYPE_ULTRASOUND) {
-        if (!accessUltrasoundAllowed(attributionSource)) {
+        if (!(audioserver_permissions() ?
+                CHECK_PERM(ACCESS_ULTRASOUND, attributionSource.uid)
+                : accessUltrasoundAllowed(attributionSource))) {
             ALOGE("%s: permission denied: ultrasound not allowed for uid %d pid %d",
                     __func__, attributionSource.uid, attributionSource.pid);
             return binderStatusFromStatusT(PERMISSION_DENIED);
@@ -382,6 +430,7 @@ Status AudioPolicyService::getOutputForAttr(const media::audio::common::AudioAtt
     AudioPolicyInterface::output_type_t outputType;
     bool isSpatialized = false;
     bool isBitPerfect = false;
+    float volume;
     status_t result = mAudioPolicyManager->getOutputForAttr(&attr, &output, session,
                                                             &stream,
                                                             attributionSource,
@@ -390,7 +439,8 @@ Status AudioPolicyService::getOutputForAttr(const media::audio::common::AudioAtt
                                                             &secondaryOutputs,
                                                             &outputType,
                                                             &isSpatialized,
-                                                            &isBitPerfect);
+                                                            &isBitPerfect,
+                                                            &volume);
 
     // FIXME: Introduce a way to check for the the telephony device before opening the output
     if (result == NO_ERROR) {
@@ -400,18 +450,24 @@ Status AudioPolicyService::getOutputForAttr(const media::audio::common::AudioAtt
             break;
         case AudioPolicyInterface::API_OUTPUT_TELEPHONY_TX:
             if (((attr.flags & AUDIO_FLAG_CALL_REDIRECTION) != 0)
-                && !callAudioInterceptionAllowed(attributionSource)) {
+                && !(audioserver_permissions() ?
+                        CHECK_PERM(CALL_AUDIO_INTERCEPTION, attributionSource.uid)
+                : callAudioInterceptionAllowed(attributionSource))) {
                 ALOGE("%s() permission denied: call redirection not allowed for uid %d",
                     __func__, attributionSource.uid);
                 result = PERMISSION_DENIED;
-            } else if (!modifyPhoneStateAllowed(attributionSource)) {
+            } else if (!(audioserver_permissions() ?
+                        CHECK_PERM(MODIFY_PHONE_STATE, attributionSource.uid)
+                    : modifyPhoneStateAllowed(attributionSource))) {
                 ALOGE("%s() permission denied: modify phone state not allowed for uid %d",
                     __func__, attributionSource.uid);
                 result = PERMISSION_DENIED;
             }
             break;
         case AudioPolicyInterface::API_OUT_MIX_PLAYBACK:
-            if (!modifyAudioRoutingAllowed(attributionSource)) {
+            if (!(audioserver_permissions() ?
+                        CHECK_PERM(MODIFY_AUDIO_ROUTING, attributionSource.uid)
+                    : modifyAudioRoutingAllowed(attributionSource))) {
                 ALOGE("%s() permission denied: modify audio routing not allowed for uid %d",
                     __func__, attributionSource.uid);
                 result = PERMISSION_DENIED;
@@ -425,12 +481,15 @@ Status AudioPolicyService::getOutputForAttr(const media::audio::common::AudioAtt
     }
 
     if (result == NO_ERROR) {
-        attr = VALUE_OR_RETURN_BINDER_STATUS(
-                mUsecaseValidator->verifyAudioAttributes(output, attributionSource, attr));
+        // usecase validator is disabled by default
+        if (property_get_bool("ro.audio.usecase_validator_enabled", false /* default */)) {
+                attr = VALUE_OR_RETURN_BINDER_STATUS(
+                        mUsecaseValidator->verifyAudioAttributes(output, attributionSource, attr));
+        }
 
         sp<AudioPlaybackClient> client =
                 new AudioPlaybackClient(attr, output, attributionSource, session,
-                    portId, selectedDeviceId, stream, isSpatialized);
+                    portId, selectedDeviceId, stream, isSpatialized, config.channel_mask);
         mAudioPlaybackClients.add(portId, client);
 
         _aidl_return->output = VALUE_OR_RETURN_BINDER_STATUS(
@@ -448,6 +507,7 @@ Status AudioPolicyService::getOutputForAttr(const media::audio::common::AudioAtt
         _aidl_return->isBitPerfect = isBitPerfect;
         _aidl_return->attr = VALUE_OR_RETURN_BINDER_STATUS(
                 legacy2aidl_audio_attributes_t_AudioAttributes(attr));
+        _aidl_return->volume = volume;
     } else {
         _aidl_return->configBase.format = VALUE_OR_RETURN_BINDER_STATUS(
                 legacy2aidl_audio_format_t_AudioFormatDescription(config.format));
@@ -630,8 +690,7 @@ Status AudioPolicyService::getInputForAttr(const media::audio::common::AudioAttr
         return binderStatusFromStatusT(BAD_VALUE);
     }
 
-    RETURN_IF_BINDER_ERROR(binderStatusFromStatusT(validateUsage(attr,
-            attributionSource)));
+    RETURN_IF_BINDER_ERROR(validateUsage(attr, attributionSource));
 
     uint32_t virtualDeviceId = kDefaultVirtualDeviceId;
 
@@ -644,8 +703,10 @@ Status AudioPolicyService::getInputForAttr(const media::audio::common::AudioAttr
     // type is API_INPUT_MIX_EXT_POLICY_REROUTE and by AudioService if a media projection
     // is used and input type is API_INPUT_MIX_PUBLIC_CAPTURE_PLAYBACK
     // - ECHO_REFERENCE source is controlled by captureAudioOutputAllowed()
-    if (!isAudioServerOrMediaServerUid(attributionSource.uid)
-            && !(recordingAllowed(attributionSource, inputSource)
+    const auto isRecordingAllowed = audioserver_permissions() ?
+            CHECK_PERM(RECORD_AUDIO, attributionSource.uid) :
+            recordingAllowed(attributionSource, inputSource);
+    if (!isAudioServerOrMediaServerUid(attributionSource.uid) && !(isRecordingAllowed
             || inputSource == AUDIO_SOURCE_FM_TUNER
             || inputSource == AUDIO_SOURCE_REMOTE_SUBMIX
             || inputSource == AUDIO_SOURCE_ECHO_REFERENCE)) {
@@ -654,8 +715,12 @@ Status AudioPolicyService::getInputForAttr(const media::audio::common::AudioAttr
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
 
-    bool canCaptureOutput = captureAudioOutputAllowed(attributionSource);
-    bool canInterceptCallAudio = callAudioInterceptionAllowed(attributionSource);
+    bool canCaptureOutput = audioserver_permissions() ?
+                        CHECK_PERM(CAPTURE_AUDIO_OUTPUT, attributionSource.uid)
+                        : captureAudioOutputAllowed(attributionSource);
+    bool canInterceptCallAudio = audioserver_permissions() ?
+                        CHECK_PERM(CALL_AUDIO_INTERCEPTION, attributionSource.uid)
+                        : callAudioInterceptionAllowed(attributionSource);
     bool isCallAudioSource = inputSource == AUDIO_SOURCE_VOICE_UPLINK
              || inputSource == AUDIO_SOURCE_VOICE_DOWNLINK
              || inputSource == AUDIO_SOURCE_VOICE_CALL;
@@ -669,11 +734,15 @@ Status AudioPolicyService::getInputForAttr(const media::audio::common::AudioAttr
     }
     if (inputSource == AUDIO_SOURCE_FM_TUNER
         && !canCaptureOutput
-        && !captureTunerAudioInputAllowed(attributionSource)) {
+        && !(audioserver_permissions() ?
+                        CHECK_PERM(CAPTURE_TUNER_AUDIO_INPUT, attributionSource.uid)
+            : captureTunerAudioInputAllowed(attributionSource))) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
 
-    bool canCaptureHotword = captureHotwordAllowed(attributionSource);
+    bool canCaptureHotword = audioserver_permissions() ?
+                        CHECK_PERM(CAPTURE_AUDIO_HOTWORD, attributionSource.uid)
+                        : captureHotwordAllowed(attributionSource);
     if ((inputSource == AUDIO_SOURCE_HOTWORD) && !canCaptureHotword) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
@@ -688,7 +757,9 @@ Status AudioPolicyService::getInputForAttr(const media::audio::common::AudioAttr
     }
 
     if (attr.source == AUDIO_SOURCE_ULTRASOUND) {
-        if (!accessUltrasoundAllowed(attributionSource)) {
+        if (!(audioserver_permissions() ?
+                CHECK_PERM(ACCESS_ULTRASOUND, attributionSource.uid)
+                : accessUltrasoundAllowed(attributionSource))) {
             ALOGE("%s: permission denied: ultrasound not allowed for uid %d pid %d",
                     __func__, attributionSource.uid, attributionSource.pid);
             return binderStatusFromStatusT(PERMISSION_DENIED);
@@ -734,14 +805,29 @@ Status AudioPolicyService::getInputForAttr(const media::audio::common::AudioAttr
                     status = PERMISSION_DENIED;
                 }
                 break;
-            case AudioPolicyInterface::API_INPUT_MIX_EXT_POLICY_REROUTE:
-                if (!(modifyAudioRoutingAllowed(attributionSource)
+            case AudioPolicyInterface::API_INPUT_MIX_EXT_POLICY_REROUTE: {
+                bool modAudioRoutingAllowed;
+                if (audioserver_permissions()) {
+                        auto result = getPermissionProvider().checkPermission(
+                                MODIFY_AUDIO_ROUTING, attributionSource.uid);
+                        if (!result.ok()) {
+                            ALOGE("%s permission provider error: %s", __func__,
+                                    result.error().toString8().c_str());
+                            status = aidl_utils::statusTFromBinderStatus(result.error());
+                            break;
+                        }
+                        modAudioRoutingAllowed = result.value();
+                } else {
+                    modAudioRoutingAllowed = modifyAudioRoutingAllowed(attributionSource);
+                }
+                if (!(modAudioRoutingAllowed
                         || ((attr.flags & AUDIO_FLAG_CALL_REDIRECTION) != 0
                             && canInterceptCallAudio))) {
                     ALOGE("%s permission denied for remote submix capture", __func__);
                     status = PERMISSION_DENIED;
                 }
                 break;
+            }
             case AudioPolicyInterface::API_INPUT_INVALID:
             default:
                 LOG_ALWAYS_FATAL("%s encountered an invalid input type %d",
@@ -824,14 +910,14 @@ Status AudioPolicyService::startInput(int32_t portIdAidl)
 
     std::stringstream msg;
     msg << "Audio recording on session " << client->session;
+    const auto permitted = isAudioServerOrMediaServerUid(client->attributionSource.uid) ||
+            startRecording(client->attributionSource, client->virtualDeviceId,
+            String16(msg.str().c_str()), client->attributes.source);
 
     // check calling permissions
-    if (!isAudioServerOrMediaServerUid(client->attributionSource.uid)
-            && !(startRecording(client->attributionSource, client->virtualDeviceId,
-                         String16(msg.str().c_str()), client->attributes.source)
-            || client->attributes.source == AUDIO_SOURCE_FM_TUNER
-            || client->attributes.source == AUDIO_SOURCE_REMOTE_SUBMIX
-            || client->attributes.source == AUDIO_SOURCE_ECHO_REFERENCE)) {
+    if (permitted == PERMISSION_HARD_DENIED && client->attributes.source != AUDIO_SOURCE_FM_TUNER
+            && client->attributes.source != AUDIO_SOURCE_REMOTE_SUBMIX
+            && client->attributes.source != AUDIO_SOURCE_ECHO_REFERENCE) {
         ALOGE("%s permission denied: recording not allowed for attribution source %s",
                 __func__, client->attributionSource.toString().c_str());
         return binderStatusFromStatusT(PERMISSION_DENIED);
@@ -851,13 +937,17 @@ Status AudioPolicyService::startInput(int32_t portIdAidl)
         return binderStatusFromStatusT(INVALID_OPERATION);
     }
 
-    // Force the possibly silenced client to be unsilenced since we just called
-    // startRecording (i.e. we have assumed it is unsilenced).
-    // At this point in time, the client is inactive, so no calls to appops are sent in
-    // setAppState_l.
-    // This ensures existing clients have the same behavior as new clients (starting unsilenced).
+    // Force the possibly silenced client to match the state on the appops side
+    // following the call to startRecording (i.e. unsilenced iff call succeeded)
+    // At this point in time, the client is inactive, so no calls to appops are
+    // sent in setAppState_l. This ensures existing clients have the same
+    // behavior as new clients.
     // TODO(b/282076713)
-    setAppState_l(client, APP_STATE_TOP);
+    if (permitted == PERMISSION_GRANTED) {
+        setAppState_l(client, APP_STATE_TOP);
+    } else {
+        setAppState_l(client, APP_STATE_IDLE);
+    }
 
     client->active = true;
     client->startTimeNs = systemTime();
@@ -943,8 +1033,10 @@ Status AudioPolicyService::startInput(int32_t portIdAidl)
         client->active = false;
         client->startTimeNs = 0;
         updateUidStates_l();
-        finishRecording(client->attributionSource, client->virtualDeviceId,
-                        client->attributes.source);
+        if (!client->silenced) {
+            finishRecording(client->attributionSource, client->virtualDeviceId,
+                    client->attributes.source);
+        }
     }
 
     return binderStatusFromStatusT(status);
@@ -973,7 +1065,11 @@ Status AudioPolicyService::stopInput(int32_t portIdAidl)
     updateUidStates_l();
 
     // finish the recording app op
-    finishRecording(client->attributionSource, client->virtualDeviceId, client->attributes.source);
+    if (!client->silenced) {
+        finishRecording(client->attributionSource, client->virtualDeviceId,
+                client->attributes.source);
+    }
+
     AutoCallerClear acc;
     return binderStatusFromStatusT(mAudioPolicyManager->stopInput(portId));
 }
@@ -1027,8 +1123,15 @@ Status AudioPolicyService::releaseInput(int32_t portIdAidl)
 Status AudioPolicyService::setDeviceAbsoluteVolumeEnabled(const AudioDevice& deviceAidl,
                                                           bool enabled,
                                                           AudioStreamType streamToDriveAbsAidl) {
-    audio_stream_type_t streamToDriveAbs = VALUE_OR_RETURN_BINDER_STATUS(
-            aidl2legacy_AudioStreamType_audio_stream_type_t(streamToDriveAbsAidl));
+    ALOGI("%s: deviceAidl %s, enabled %d, streamToDriveAbsAidl %d", __func__,
+          deviceAidl.toString().c_str(), enabled, streamToDriveAbsAidl);
+
+    audio_stream_type_t streamToDriveAbs = AUDIO_STREAM_DEFAULT;
+    if (enabled) {
+        streamToDriveAbs = VALUE_OR_RETURN_BINDER_STATUS(
+                aidl2legacy_AudioStreamType_audio_stream_type_t(streamToDriveAbsAidl));
+    }
+
     audio_devices_t deviceType;
     std::string address;
     RETURN_BINDER_STATUS_IF_ERROR(
@@ -1037,12 +1140,12 @@ Status AudioPolicyService::setDeviceAbsoluteVolumeEnabled(const AudioDevice& dev
     if (mAudioPolicyManager == nullptr) {
         return binderStatusFromStatusT(NO_INIT);
     }
-    if (!settingsAllowed()) {
+    if (!(audioserver_permissions() ?
+            CHECK_PERM(MODIFY_AUDIO_SETTINGS, IPCThreadState::self()->getCallingUid())
+            : settingsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
-    if (uint32_t(streamToDriveAbs) >= AUDIO_STREAM_PUBLIC_CNT) {
-        return binderStatusFromStatusT(BAD_VALUE);
-    }
+
     audio_utils::lock_guard _l(mMutex);
     AutoCallerClear acc;
     return binderStatusFromStatusT(
@@ -1061,7 +1164,9 @@ Status AudioPolicyService::initStreamVolume(AudioStreamType streamAidl,
     if (mAudioPolicyManager == NULL) {
         return binderStatusFromStatusT(NO_INIT);
     }
-    if (!settingsAllowed()) {
+    if (!(audioserver_permissions() ?
+            CHECK_PERM(MODIFY_AUDIO_SETTINGS, IPCThreadState::self()->getCallingUid())
+            : settingsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     if (uint32_t(stream) >= AUDIO_STREAM_PUBLIC_CNT) {
@@ -1085,7 +1190,9 @@ Status AudioPolicyService::setStreamVolumeIndex(AudioStreamType streamAidl,
     if (mAudioPolicyManager == NULL) {
         return binderStatusFromStatusT(NO_INIT);
     }
-    if (!settingsAllowed()) {
+    if (!(audioserver_permissions() ?
+            CHECK_PERM(MODIFY_AUDIO_SETTINGS, IPCThreadState::self()->getCallingUid())
+            : settingsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     if (uint32_t(stream) >= AUDIO_STREAM_PUBLIC_CNT) {
@@ -1135,7 +1242,9 @@ Status AudioPolicyService::setVolumeIndexForAttributes(
     if (mAudioPolicyManager == NULL) {
         return binderStatusFromStatusT(NO_INIT);
     }
-    if (!settingsAllowed()) {
+    if (!(audioserver_permissions() ?
+            CHECK_PERM(MODIFY_AUDIO_SETTINGS, IPCThreadState::self()->getCallingUid())
+            : settingsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     audio_utils::lock_guard _l(mMutex);
@@ -1441,7 +1550,9 @@ Status AudioPolicyService::addSourceDefaultEffect(const AudioUuid& typeAidl,
 
     sp<AudioPolicyEffects>audioPolicyEffects;
     RETURN_IF_BINDER_ERROR(binderStatusFromStatusT(getAudioPolicyEffects(audioPolicyEffects)));
-    if (!modifyDefaultAudioEffectsAllowed()) {
+    if (!(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_DEFAULT_AUDIO_EFFECTS, IPCThreadState::self()->getCallingUid())
+                : modifyDefaultAudioEffectsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     RETURN_IF_BINDER_ERROR(binderStatusFromStatusT(audioPolicyEffects->addSourceDefaultEffect(
@@ -1467,7 +1578,9 @@ Status AudioPolicyService::addStreamDefaultEffect(const AudioUuid& typeAidl,
 
     sp<AudioPolicyEffects> audioPolicyEffects;
     RETURN_IF_BINDER_ERROR(binderStatusFromStatusT(getAudioPolicyEffects(audioPolicyEffects)));
-    if (!modifyDefaultAudioEffectsAllowed()) {
+    if (!(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_DEFAULT_AUDIO_EFFECTS, IPCThreadState::self()->getCallingUid())
+                : modifyDefaultAudioEffectsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     RETURN_IF_BINDER_ERROR(binderStatusFromStatusT(audioPolicyEffects->addStreamDefaultEffect(
@@ -1482,7 +1595,9 @@ Status AudioPolicyService::removeSourceDefaultEffect(int32_t idAidl)
             aidl2legacy_int32_t_audio_unique_id_t(idAidl));
     sp<AudioPolicyEffects>audioPolicyEffects;
     RETURN_IF_BINDER_ERROR(binderStatusFromStatusT(getAudioPolicyEffects(audioPolicyEffects)));
-    if (!modifyDefaultAudioEffectsAllowed()) {
+    if (!(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_DEFAULT_AUDIO_EFFECTS, IPCThreadState::self()->getCallingUid())
+                : modifyDefaultAudioEffectsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     return binderStatusFromStatusT(audioPolicyEffects->removeSourceDefaultEffect(id));
@@ -1494,7 +1609,9 @@ Status AudioPolicyService::removeStreamDefaultEffect(int32_t idAidl)
             aidl2legacy_int32_t_audio_unique_id_t(idAidl));
     sp<AudioPolicyEffects>audioPolicyEffects;
     RETURN_IF_BINDER_ERROR(binderStatusFromStatusT(getAudioPolicyEffects(audioPolicyEffects)));
-    if (!modifyDefaultAudioEffectsAllowed()) {
+    if (!(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_DEFAULT_AUDIO_EFFECTS, IPCThreadState::self()->getCallingUid())
+                : modifyDefaultAudioEffectsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     return binderStatusFromStatusT(audioPolicyEffects->removeStreamDefaultEffect(id));
@@ -1512,7 +1629,9 @@ Status AudioPolicyService::setSupportedSystemUsages(
                          std::back_inserter(systemUsages), aidl2legacy_AudioUsage_audio_usage_t)));
 
     audio_utils::lock_guard _l(mMutex);
-    if(!modifyAudioRoutingAllowed()) {
+    if (!(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_AUDIO_ROUTING, IPCThreadState::self()->getCallingUid())
+                : modifyAudioRoutingAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
 
@@ -1571,7 +1690,7 @@ Status AudioPolicyService::isDirectOutputSupported(
         return binderStatusFromStatusT(NO_INIT);
     }
 
-    RETURN_IF_BINDER_ERROR(binderStatusFromStatusT(validateUsage(attributes)));
+    RETURN_IF_BINDER_ERROR(validateUsage(attributes));
 
     audio_utils::lock_guard _l(mMutex);
     *_aidl_return = mAudioPolicyManager->isDirectOutputSupported(config, attributes);
@@ -1646,7 +1765,9 @@ Status AudioPolicyService::createAudioPatch(const media::AudioPatchFw& patchAidl
     RETURN_IF_BINDER_ERROR(binderStatusFromStatusT(AudioValidator::validateAudioPatch(patch)));
 
     audio_utils::lock_guard _l(mMutex);
-    if(!modifyAudioRoutingAllowed()) {
+    if (!(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_AUDIO_ROUTING, IPCThreadState::self()->getCallingUid())
+                : modifyAudioRoutingAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     if (mAudioPolicyManager == NULL) {
@@ -1665,7 +1786,9 @@ Status AudioPolicyService::releaseAudioPatch(int32_t handleAidl)
     audio_patch_handle_t handle = VALUE_OR_RETURN_BINDER_STATUS(
             aidl2legacy_int32_t_audio_patch_handle_t(handleAidl));
     audio_utils::lock_guard _l(mMutex);
-    if(!modifyAudioRoutingAllowed()) {
+    if (!(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_AUDIO_ROUTING, IPCThreadState::self()->getCallingUid())
+                : modifyAudioRoutingAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     if (mAudioPolicyManager == NULL) {
@@ -1713,7 +1836,9 @@ Status AudioPolicyService::setAudioPortConfig(const media::AudioPortConfigFw& co
             binderStatusFromStatusT(AudioValidator::validateAudioPortConfig(config)));
 
     audio_utils::lock_guard _l(mMutex);
-    if(!modifyAudioRoutingAllowed()) {
+    if (!(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_AUDIO_ROUTING, IPCThreadState::self()->getCallingUid())
+                : modifyAudioRoutingAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     if (mAudioPolicyManager == NULL) {
@@ -1776,7 +1901,9 @@ Status AudioPolicyService::registerPolicyMixes(const std::vector<media::AudioMix
     // loopback|render only need a MediaProjection (checked in caller AudioService.java)
     bool needModifyAudioRouting = std::any_of(mixes.begin(), mixes.end(), [](auto& mix) {
             return !is_mix_loopback_render(mix.mRouteFlags); });
-    if (needModifyAudioRouting && !modifyAudioRoutingAllowed()) {
+    if (needModifyAudioRouting && !(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_AUDIO_ROUTING, IPCThreadState::self()->getCallingUid())
+                : modifyAudioRoutingAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
 
@@ -1792,12 +1919,16 @@ Status AudioPolicyService::registerPolicyMixes(const std::vector<media::AudioMix
     const AttributionSourceState attributionSource = getCallingAttributionSource();
 
 
-    if (needCaptureMediaOutput && !captureMediaOutputAllowed(attributionSource)) {
+    if (needCaptureMediaOutput && !(audioserver_permissions() ?
+                CHECK_PERM(CAPTURE_MEDIA_OUTPUT, attributionSource.uid)
+                : modifyAudioRoutingAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
 
     if (needCaptureVoiceCommunicationOutput &&
-        !captureVoiceCommunicationOutputAllowed(attributionSource)) {
+        !(audioserver_permissions() ?
+                CHECK_PERM(CAPTURE_VOICE_COMMUNICATION_OUTPUT, attributionSource.uid)
+                : captureVoiceCommunicationOutputAllowed(attributionSource))) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
 
@@ -1854,7 +1985,9 @@ Status AudioPolicyService::setUidDeviceAffinities(
                                                         aidl2legacy_AudioDeviceTypeAddress));
 
     audio_utils::lock_guard _l(mMutex);
-    if(!modifyAudioRoutingAllowed()) {
+    if (!(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_AUDIO_ROUTING, IPCThreadState::self()->getCallingUid())
+                : modifyAudioRoutingAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     if (mAudioPolicyManager == NULL) {
@@ -1868,7 +2001,9 @@ Status AudioPolicyService::removeUidDeviceAffinities(int32_t uidAidl) {
     uid_t uid = VALUE_OR_RETURN_BINDER_STATUS(aidl2legacy_int32_t_uid_t(uidAidl));
 
     audio_utils::lock_guard _l(mMutex);
-    if(!modifyAudioRoutingAllowed()) {
+    if (!(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_AUDIO_ROUTING, IPCThreadState::self()->getCallingUid())
+                : modifyAudioRoutingAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     if (mAudioPolicyManager == NULL) {
@@ -1887,7 +2022,9 @@ Status AudioPolicyService::setUserIdDeviceAffinities(
                                                         aidl2legacy_AudioDeviceTypeAddress));
 
     audio_utils::lock_guard _l(mMutex);
-    if(!modifyAudioRoutingAllowed()) {
+    if (!(audioserver_permissions() ?
+                CHECK_PERM(MODIFY_AUDIO_ROUTING, IPCThreadState::self()->getCallingUid())
+                : modifyAudioRoutingAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     if (mAudioPolicyManager == NULL) {
@@ -1901,7 +2038,9 @@ Status AudioPolicyService::removeUserIdDeviceAffinities(int32_t userIdAidl) {
     int userId = VALUE_OR_RETURN_BINDER_STATUS(convertReinterpret<int>(userIdAidl));
 
     audio_utils::lock_guard _l(mMutex);
-    if(!modifyAudioRoutingAllowed()) {
+    if (!(audioserver_permissions() ?
+            CHECK_PERM(MODIFY_AUDIO_ROUTING, IPCThreadState::self()->getCallingUid())
+            : modifyAudioRoutingAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     if (mAudioPolicyManager == NULL) {
@@ -1929,7 +2068,7 @@ Status AudioPolicyService::startAudioSource(const media::AudioPortConfigFw& sour
         return binderStatusFromStatusT(NO_INIT);
     }
 
-    RETURN_IF_BINDER_ERROR(binderStatusFromStatusT(validateUsage(attributes)));
+    RETURN_IF_BINDER_ERROR(validateUsage(attributes));
 
     // startAudioSource should be created as the calling uid
     const uid_t callingUid = IPCThreadState::self()->getCallingUid();
@@ -1958,7 +2097,9 @@ Status AudioPolicyService::setMasterMono(bool mono)
     if (mAudioPolicyManager == NULL) {
         return binderStatusFromStatusT(NO_INIT);
     }
-    if (!settingsAllowed()) {
+    if (!(audioserver_permissions() ?
+            CHECK_PERM(MODIFY_AUDIO_SETTINGS, IPCThreadState::self()->getCallingUid())
+            : settingsAllowed())) {
         return binderStatusFromStatusT(PERMISSION_DENIED);
     }
     audio_utils::lock_guard _l(mMutex);

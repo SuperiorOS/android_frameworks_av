@@ -102,7 +102,10 @@ class AudioRecordCreateTest : public ::testing::TestWithParam<RecordCreateTestPa
     }
 
     void TearDown() override {
-        if (mAC) ASSERT_EQ(OK, mAC->stop());
+        if (mAC) {
+            ASSERT_EQ(OK, mAC->stop());
+            mAC.clear();
+        }
     }
 };
 
@@ -120,10 +123,12 @@ TEST_F(AudioRecordTest, TestAudioCbNotifier) {
     EXPECT_EQ(OK, mAC->getAudioRecordHandle()->addAudioDeviceCallback(cb));
     EXPECT_EQ(OK, mAC->start()) << "record creation failed";
     EXPECT_EQ(OK, cb->waitForAudioDeviceCb());
-    EXPECT_EQ(AUDIO_IO_HANDLE_NONE, cbOld->mAudioIo);
-    EXPECT_EQ(AUDIO_PORT_HANDLE_NONE, cbOld->mDeviceId);
-    EXPECT_NE(AUDIO_IO_HANDLE_NONE, cb->mAudioIo);
-    EXPECT_NE(AUDIO_PORT_HANDLE_NONE, cb->mDeviceId);
+    const auto [oldAudioIo, oldDeviceId] = cbOld->getLastPortAndDevice();
+    EXPECT_EQ(AUDIO_IO_HANDLE_NONE, oldAudioIo);
+    EXPECT_EQ(AUDIO_PORT_HANDLE_NONE, oldDeviceId);
+    const auto [audioIo, deviceId] = cb->getLastPortAndDevice();
+    EXPECT_NE(AUDIO_IO_HANDLE_NONE, audioIo);
+    EXPECT_NE(AUDIO_PORT_HANDLE_NONE, deviceId);
     EXPECT_EQ(BAD_VALUE, mAC->getAudioRecordHandle()->removeAudioDeviceCallback(nullptr));
     EXPECT_EQ(INVALID_OPERATION, mAC->getAudioRecordHandle()->removeAudioDeviceCallback(cbOld));
     EXPECT_EQ(OK, mAC->getAudioRecordHandle()->removeAudioDeviceCallback(cb));
@@ -166,31 +171,33 @@ TEST_F(AudioRecordTest, TestEventRecordTrackStop) {
 }
 
 TEST_F(AudioRecordTest, TestGetSetMarker) {
-    mAC->mMarkerPosition = (mAC->mNotificationFrames << 3) + (mAC->mNotificationFrames >> 1);
-    EXPECT_EQ(OK, mAC->getAudioRecordHandle()->setMarkerPosition(mAC->mMarkerPosition))
+    mAC->setMarkerPosition((mAC->mNotificationFrames << 3) + (mAC->mNotificationFrames >> 1));
+    EXPECT_EQ(OK, mAC->getAudioRecordHandle()->setMarkerPosition(mAC->getMarkerPosition()))
             << "setMarkerPosition() failed";
     uint32_t marker;
     EXPECT_EQ(OK, mAC->getAudioRecordHandle()->getMarkerPosition(&marker))
             << "getMarkerPosition() failed";
     EXPECT_EQ(OK, mAC->start()) << "start recording failed";
     EXPECT_EQ(OK, mAC->audioProcess()) << "audioProcess failed";
-    EXPECT_EQ(marker, mAC->mMarkerPosition)
+    EXPECT_EQ(marker, mAC->getMarkerPosition())
             << "configured marker and received marker are different";
-    EXPECT_EQ(mAC->mReceivedCbMarkerAtPosition, mAC->mMarkerPosition)
+    EXPECT_EQ(mAC->waitAndGetReceivedCbMarkerAtPosition(), mAC->getMarkerPosition())
             << "configured marker and received cb marker are different";
 }
 
 TEST_F(AudioRecordTest, TestGetSetMarkerPeriodical) {
-    mAC->mMarkerPeriod = (mAC->mNotificationFrames << 3) + (mAC->mNotificationFrames >> 1);
-    EXPECT_EQ(OK, mAC->getAudioRecordHandle()->setPositionUpdatePeriod(mAC->mMarkerPeriod))
+    mAC->setMarkerPeriod((mAC->mNotificationFrames << 3) + (mAC->mNotificationFrames >> 1));
+    EXPECT_EQ(OK, mAC->getAudioRecordHandle()->setPositionUpdatePeriod(mAC->getMarkerPeriod()))
             << "setPositionUpdatePeriod() failed";
     uint32_t marker;
     EXPECT_EQ(OK, mAC->getAudioRecordHandle()->getPositionUpdatePeriod(&marker))
             << "getPositionUpdatePeriod() failed";
     EXPECT_EQ(OK, mAC->start()) << "start recording failed";
     EXPECT_EQ(OK, mAC->audioProcess()) << "audioProcess failed";
-    EXPECT_EQ(marker, mAC->mMarkerPeriod) << "configured marker and received marker are different";
-    EXPECT_EQ(mAC->mReceivedCbMarkerCount, mAC->mNumFramesToRecord / mAC->mMarkerPeriod)
+    EXPECT_EQ(marker, mAC->getMarkerPeriod())
+            << "configured marker and received marker are different";
+    EXPECT_EQ(mAC->waitAndGetReceivedCbMarkerCount(),
+              mAC->mNumFramesToRecord / mAC->getMarkerPeriod())
             << "configured marker and received cb marker are different";
 }
 
@@ -217,12 +224,12 @@ TEST_P(AudioRecordCreateTest, TestCreateRecord) {
         EXPECT_EQ(mSessionId, mAC->getAudioRecordHandle()->getSessionId());
     if (mTransferType != AudioRecord::TRANSFER_CALLBACK) {
         uint32_t marker;
-        mAC->mMarkerPosition = (mAC->mNotificationFrames << 3) + (mAC->mNotificationFrames >> 1);
+        mAC->setMarkerPosition((mAC->mNotificationFrames << 3) + (mAC->mNotificationFrames >> 1));
         EXPECT_EQ(INVALID_OPERATION,
-                  mAC->getAudioRecordHandle()->setMarkerPosition(mAC->mMarkerPosition));
+                  mAC->getAudioRecordHandle()->setMarkerPosition(mAC->getMarkerPosition()));
         EXPECT_EQ(OK, mAC->getAudioRecordHandle()->getMarkerPosition(&marker));
         EXPECT_EQ(INVALID_OPERATION,
-                  mAC->getAudioRecordHandle()->setPositionUpdatePeriod(mAC->mMarkerPosition));
+                  mAC->getAudioRecordHandle()->setPositionUpdatePeriod(mAC->getMarkerPosition()));
         EXPECT_EQ(OK, mAC->getAudioRecordHandle()->getPositionUpdatePeriod(&marker));
     }
     EXPECT_EQ(OK, mAC->start()) << "start recording failed";

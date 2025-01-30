@@ -38,6 +38,8 @@ cc_library_shared {
     shared_libs: [
         "libaudiopolicycomponents",
         "libaudiopolicyengineconfigurable",
+        "libbase",
+        "libcutils",
         "liblog",
         "libmedia_helper",
         "libparameter",

@@ -75,6 +75,7 @@ cc_library {
         local_include_dirs: ["aidl"],
         include_dirs: [
             "frameworks/native/aidl/gui",
+            "frameworks/native/libs/permission/aidl",
         ],
     },
 
@@ -106,6 +107,7 @@ cc_library {
 
     shared_libs: [
         "camera_platform_flags_c_lib",
+        "framework-permission-aidl-cpp",
         "lib-platform-compat-native-api",
         "libbase",
         "libbinder",
@@ -114,6 +116,7 @@ cc_library {
         "libgui",
         "liblog",
         "libnativewindow",
+        "libpermission",
         "libutils",
     ],
 
@@ -126,6 +129,7 @@ cc_library {
         "include/camera",
     ],
     export_shared_lib_headers: [
+        "framework-permission-aidl-cpp",
         "libcamera_metadata",
         "libgui",
         "libnativewindow",

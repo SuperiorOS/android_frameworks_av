@@ -44,11 +44,6 @@ static std::optional<std::string> getFixedPackageName(uid_t uid) {
             return "audioserver";
         case AID_CAMERASERVER:
             return "cameraserver";
-        // These packages are not handled by AppOps, but labeling may be useful for us
-        case AID_RADIO:
-            return "telephony";
-        case AID_BLUETOOTH:
-            return "bluetooth";
         default:
             return std::nullopt;
     }
@@ -129,10 +124,12 @@ BinderResult<std::vector<std::string>> NativePermissionController::getPackagesFo
 
 BinderResult<bool> NativePermissionController::validateUidPackagePair(
         uid_t uid, const std::string& packageName) const {
+    if (uid == AID_ROOT || uid == AID_SYSTEM) return true;
     uid = uid % AID_USER_OFFSET;
     const auto fixed_package_opt = getFixedPackageName(uid);
     if (fixed_package_opt.has_value()) {
-        return packageName == fixed_package_opt.value();
+        return (uid == AID_ROOT || uid == AID_SYSTEM) ? true :
+                packageName == fixed_package_opt.value();
     }
     std::lock_guard l{m_};
     if (!is_package_populated_) {
@@ -148,6 +145,7 @@ BinderResult<bool> NativePermissionController::validateUidPackagePair(
 
 BinderResult<bool> NativePermissionController::checkPermission(PermissionEnum perm,
                                                                uid_t uid) const {
+    if (uid == AID_ROOT || uid == AID_SYSTEM || uid == getuid()) return true;
     std::lock_guard l{m_};
     const auto& uids = permission_map_[static_cast<size_t>(perm)];
     if (!uids.empty()) {

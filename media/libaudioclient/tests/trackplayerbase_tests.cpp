@@ -54,7 +54,7 @@ class TrackPlayerBaseTest
         mPlayer = new TrackPlayer();
         mPlayer->init(track.get(), mPlayer, PLAYER_TYPE_AAUDIO, AUDIO_USAGE_MEDIA,
                       AUDIO_SESSION_NONE);
-        sp<AudioTrack> playerTrack = mPlayer->mAudioTrack;
+        sp<AudioTrack> playerTrack = mPlayer->getAudioTrack();
         ASSERT_EQ(playerTrack->initCheck(), NO_ERROR);
 
         mBufferSize = mFrameCount * playerTrack->frameSize();
@@ -74,7 +74,7 @@ class TrackPlayerBaseTest
 
     void playBuffer() {
         bool blocking = true;
-        ssize_t nbytes = mPlayer->mAudioTrack->write(mBuffer.data(), mBufferSize, blocking);
+        ssize_t nbytes = mPlayer->getAudioTrack()->write(mBuffer.data(), mBufferSize, blocking);
         EXPECT_EQ(nbytes, mBufferSize) << "Did not write all data in blocking mode";
     }
 

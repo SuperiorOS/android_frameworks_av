@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <CapEngineConfig.h>
 #include <media/AudioContainers.h>
 #include <system/audio.h>
 #include <system/audio_policy.h>
@@ -27,7 +28,7 @@
 #include <string>
 #include <vector>
 
-class CParameterMgrPlatformConnector;
+class CParameterMgrFullConnector;
 class ISelectionCriterionInterface;
 struct cnode;
 
@@ -58,6 +59,9 @@ public:
      * @return NO_ERROR if success, error code otherwise, and error is set to human readable string.
      */
     status_t start(std::string &error);
+
+    status_t setConfiguration(const android::capEngineConfig::ParsingResult& capSettings);
+
 
     /**
      * The following API wrap policy action to criteria
@@ -148,6 +152,14 @@ public:
             uint64_t criterionValue, bool isOut) const;
 
 private:
+    void createDomain(const std::string &domain);
+    void addConfigurableElementToDomain(const std::string &domain, const std::string &elementPath);
+    void createConfiguration(const std::string &domain, const std::string &configurationName);
+    void setApplicationRule(const std::string &domain, const std::string &configurationName,
+            const std::string &rule);
+    void accessConfigurationValue(const std::string &domain, const std::string &configurationName,
+                                  const std::string &elementPath, std::string &value);
+
     /**
      * Apply the configuration of the platform on the policy parameter manager.
      * Once all the criteria have been set, the client of the platform state must call
@@ -206,7 +218,7 @@ private:
 
     Criteria mPolicyCriteria; /**< Policy Criterion Map. */
 
-    CParameterMgrPlatformConnector *mPfwConnector; /**< Policy Parameter Manager connector. */
+    CParameterMgrFullConnector *mPfwConnector; /**< Policy Parameter Manager connector. */
     ParameterMgrPlatformConnectorLogger *mPfwConnectorLogger; /**< Policy PFW logger. */
 
 

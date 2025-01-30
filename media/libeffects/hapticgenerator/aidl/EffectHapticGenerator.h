@@ -30,7 +30,6 @@ class HapticGeneratorImpl final : public EffectImpl {
     HapticGeneratorImpl() = default;
     ~HapticGeneratorImpl() { cleanUp(); }
 
-    ndk::ScopedAStatus commandImpl(CommandId command) REQUIRES(mImplMutex) override;
     ndk::ScopedAStatus getDescriptor(Descriptor* _aidl_return) override;
     ndk::ScopedAStatus setParameterSpecific(const Parameter::Specific& specific)
             REQUIRES(mImplMutex) override;

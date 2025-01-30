@@ -58,6 +58,8 @@
 #include PREFIX(android/media/audio/common/AudioMode.h)
 #include PREFIX(android/media/audio/common/AudioOffloadInfo.h)
 #include PREFIX(android/media/audio/common/AudioOutputFlags.h)
+#include PREFIX(android/media/audio/common/AudioPolicyForceUse.h)
+#include PREFIX(android/media/audio/common/AudioPolicyForcedConfig.h)
 #include PREFIX(android/media/audio/common/AudioPort.h)
 #include PREFIX(android/media/audio/common/AudioPortConfig.h)
 #include PREFIX(android/media/audio/common/AudioPortExt.h)
@@ -76,6 +78,7 @@
 
 #include <system/audio.h>
 #include <system/audio_effect.h>
+#include <system/audio_policy.h>
 
 #if defined(BACKEND_NDK_IMPL)
 namespace aidl {
@@ -453,6 +456,18 @@ legacy2aidl_audio_microphone_characteristic_t_MicrophoneInfos(
         const audio_microphone_characteristic_t& legacy,
         media::audio::common::MicrophoneInfo* aidlInfo,
         media::audio::common::MicrophoneDynamicInfo* aidlDynamic);
+
+ConversionResult<audio_policy_forced_cfg_t>
+aidl2legacy_AudioPolicyForcedConfig_audio_policy_forced_cfg_t(
+        media::audio::common::AudioPolicyForcedConfig aidl);
+ConversionResult<media::audio::common::AudioPolicyForcedConfig>
+legacy2aidl_audio_policy_forced_cfg_t_AudioPolicyForcedConfig(audio_policy_forced_cfg_t legacy);
+
+ConversionResult<audio_policy_force_use_t>
+aidl2legacy_AudioPolicyForceUse_audio_policy_force_use_t(
+        media::audio::common::AudioPolicyForceUse aidl);
+ConversionResult<media::audio::common::AudioPolicyForceUse>
+legacy2aidl_audio_policy_force_use_t_AudioPolicyForceUse(audio_policy_force_use_t legacy);
 
 }  // namespace android
 

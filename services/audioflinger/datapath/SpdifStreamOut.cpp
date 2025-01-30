@@ -45,7 +45,8 @@ status_t SpdifStreamOut::open(
         audio_io_handle_t handle,
         audio_devices_t devices,
         struct audio_config *config,
-        const char *address)
+        const char *address,
+        const std::vector<playback_track_metadata_v7_t>& sourceMetadata)
 {
     struct audio_config customConfig = *config;
 
@@ -75,7 +76,8 @@ status_t SpdifStreamOut::open(
             handle,
             devices,
             &customConfig,
-            address);
+            address,
+            sourceMetadata);
 
     ALOGI("SpdifStreamOut::open() status = %d", status);
 

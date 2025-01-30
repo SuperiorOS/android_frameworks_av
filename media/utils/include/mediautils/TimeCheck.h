@@ -42,19 +42,29 @@ class TimeCheck {
     //  float elapsedMs (the elapsed time to this event).
     using OnTimerFunc = std::function<void(bool /* timeout */, float /* elapsedMs */ )>;
 
-    // The default timeout is chosen to be less than system server watchdog timeout
-    // Note: kDefaultTimeOutMs should be no less than 2 seconds, otherwise spurious timeouts
-    // may occur with system suspend.
-    static constexpr TimeCheck::Duration kDefaultTimeoutDuration = std::chrono::milliseconds(3000);
+    /**
+     * Returns the default timeout to use for TimeCheck.
+     *
+     * The default timeout of 3000ms (kDefaultTimeoutDurationMs) is chosen to be less than
+     * the system server watchdog timeout, and can be changed by the sysprop
+     * audio.timecheck.timeout_duration_ms.
+     * A second chance wait may be set to extend the check.
+     */
+    static TimeCheck::Duration getDefaultTimeoutDuration();
 
-    // Due to suspend abort not incrementing the monotonic clock,
-    // we allow another second chance timeout after the first timeout expires.
-    //
-    // The total timeout is therefore kDefaultTimeoutDuration + kDefaultSecondChanceDuration,
-    // and the result is more stable when the monotonic clock increments during suspend.
-    //
-    static constexpr TimeCheck::Duration kDefaultSecondChanceDuration =
-            std::chrono::milliseconds(2000);
+    /**
+     * Returns the second chance timeout to use for TimeCheck.
+     *
+     * Due to suspend abort not incrementing the monotonic clock,
+     * we allow another second chance timeout after the first timeout expires.
+     * The second chance timeout default of 2000ms (kDefaultSecondChanceDurationMs)
+     * may be changed by the sysprop audio.timecheck.second_chance_duration_ms.
+     *
+     * The total timeout is therefore
+     * getDefaultTimeoutDuration() + getDefaultSecondChanceDuration(),
+     * and the result is more stable when the monotonic clock increments during suspend.
+     */
+    static TimeCheck::Duration getDefaultSecondChanceDuration();
 
     /**
      * TimeCheck is a RAII object which will notify a callback
@@ -97,6 +107,7 @@ class TimeCheck {
     static std::string toString();
     static void setAudioHalPids(const std::vector<pid_t>& pids);
     static std::vector<pid_t> getAudioHalPids();
+    static std::string signalAudioHals();
 
   private:
     // Helper class for handling events.
@@ -130,7 +141,8 @@ class TimeCheck {
     // Returns a string that represents the timeout vs elapsed time,
     // and diagnostics if there are any potential issues.
     static std::string analyzeTimeouts(
-            float timeoutMs, float elapsedSteadyMs, float elapsedSystemMs);
+            float timeoutMs, float secondChanceMs,
+            float elapsedSteadyMs, float elapsedSystemMs);
 
     static TimerThread& getTimeCheckThread();
     static void accessAudioHalPids(std::vector<pid_t>* pids, bool update);

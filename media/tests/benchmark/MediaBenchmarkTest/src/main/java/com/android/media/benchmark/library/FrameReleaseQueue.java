@@ -185,7 +185,7 @@ public class FrameReleaseQueue {
                 try {
                     mCodec.releaseOutputBuffer(curFrameInfo.bufferId, actualRender);
                 } catch (IllegalStateException e) {
-                    e.printStackTrace();
+                    throw(e);
                 }
             });
 

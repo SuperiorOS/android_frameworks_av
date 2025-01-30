@@ -13,6 +13,16 @@ flag {
 }
 
 flag {
+  name: "dataspace_v0_partial"
+  namespace: "codec_fwk"
+  description: "Bugfix flag for using V0 dataspace in some cases"
+  bug: "313827126"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
   name: "dynamic_color_aspects"
   is_exported: true
   namespace: "codec_fwk"
@@ -98,6 +108,16 @@ flag {
 }
 
 flag {
+  name: "secure_codecs_require_crypto"
+  namespace: "codec_fwk"
+  description: "Bugfix flag for requiring setting crypto for secure codecs"
+  bug: "365162324"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
   name: "set_callback_stall"
   namespace: "codec_fwk"
   description: "Bugfix flag for setCallback stall"
@@ -132,4 +152,11 @@ flag {
   namespace: "codec_fwk"
   description: "Feature flag to track teamfood population"
   bug: "328770262"
+}
+
+flag {
+  name: "thumbnail_block_model"
+  namespace: "codec_fwk"
+  description: "Feature flag for using block model decoder in thumbnail generation"
+  bug: "329521645"
 }

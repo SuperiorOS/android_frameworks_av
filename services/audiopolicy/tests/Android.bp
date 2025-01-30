@@ -12,6 +12,7 @@ cc_test {
     name: "audiopolicy_tests",
 
     defaults: [
+        "aconfig_lib_cc_shared_link.defaults",
         "latest_android_media_audio_common_types_cpp_static",
     ],
 
@@ -52,7 +53,10 @@ cc_test {
         "libaudiopolicymanager_interface_headers",
     ],
 
-    srcs: ["audiopolicymanager_tests.cpp"],
+    srcs: [
+        "audiopolicymanager_tests.cpp",
+        "test_execution_tracer.cpp",
+    ],
 
     data: [":audiopolicytest_configuration_files"],
 
@@ -106,7 +110,7 @@ cc_test {
         "-Werror",
     ],
 
-    test_suites: ["device-tests"],
+    test_suites: ["general-tests"],
 
 }
 

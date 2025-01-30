@@ -555,8 +555,8 @@ status_t Camera3OutputStream::configureConsumerQueueLocked(bool allowPreviewResp
     // Configure consumer-side ANativeWindow interface. The listener may be used
     // to notify buffer manager (if it is used) of the returned buffers.
     res = mConsumer->connect(NATIVE_WINDOW_API_CAMERA,
-            /*reportBufferRemoval*/true,
-            /*listener*/mBufferProducerListener);
+            /*listener*/mBufferProducerListener,
+            /*reportBufferRemoval*/true);
     if (res != OK) {
         ALOGE("%s: Unable to connect to native window for stream %d",
                 __FUNCTION__, mId);
@@ -687,11 +687,7 @@ status_t Camera3OutputStream::configureConsumerQueueLocked(bool allowPreviewResp
         }
     }
 
-    if (flags::surface_ipc()) {
-        res = mConsumer->setMaxDequeuedBufferCount(mTotalBufferCount - maxConsumerBuffers);
-    } else {
-        res = native_window_set_buffer_count(mConsumer.get(), mTotalBufferCount);
-    }
+    res = mConsumer->setMaxDequeuedBufferCount(mTotalBufferCount - maxConsumerBuffers);
     if (res != OK) {
         ALOGE("%s: Unable to set buffer count for stream %d",
                 __FUNCTION__, mId);
@@ -732,7 +728,11 @@ status_t Camera3OutputStream::configureConsumerQueueLocked(bool allowPreviewResp
         if (res == OK) {
             // Disable buffer allocation for this BufferQueue, buffer manager will take over
             // the buffer allocation responsibility.
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_PLATFORM_API_IMPROVEMENTS)
+            mConsumer->allowAllocation(false);
+#else
             mConsumer->getIGraphicBufferProducer()->allowAllocation(false);
+#endif
             mUseBufferManager = true;
         } else {
             ALOGE("%s: Unable to register stream %d to camera3 buffer manager, "
@@ -1031,7 +1031,7 @@ void Camera3OutputStream::applyZSLUsageQuirk(int format, uint64_t *consumerUsage
 status_t Camera3OutputStream::getEndpointUsageForSurface(uint64_t *usage,
         const sp<Surface>& surface) {
     bool internalConsumer = (mConsumer.get() != nullptr) && (mConsumer == surface);
-    if (mConsumerUsageCachedValue.has_value() && flags::surface_ipc() && internalConsumer) {
+    if (mConsumerUsageCachedValue.has_value() && internalConsumer) {
         *usage = mConsumerUsageCachedValue.value();
         return OK;
     }

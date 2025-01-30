@@ -22,10 +22,25 @@ flag {
 }
 
 flag {
+    name: "enable_audio_input_device_routing"
+    namespace: "media_audio"
+    description: "Allow audio input devices routing control."
+    bug: "364923030"
+}
+
+flag {
     name: "fdtostring_timeout_fix"
     namespace: "media_audio"
     description: "Improve fdtostring implementation to properly handle timing out."
     bug: "306283018"
+}
+
+flag {
+    name: "fix_call_audio_patch"
+    namespace: "media_audio"
+    description:
+        "optimize creation and release of audio patches for call routing"
+    bug: "292492229"
 }
 
 flag {
@@ -54,6 +69,22 @@ flag {
         "priority from the blocked thread to the blocking thread). "
         "This feature helps reduce audio glitching caused by low priority blocking threads."
     bug: "209491695"
+}
+
+flag {
+    name: "portid_volume_management"
+    namespace: "media_audio"
+    description:
+        "Allows to manage volume by port id within audio flinger instead of legacy stream type."
+    bug: "317212590"
+}
+
+flag {
+    name: "power_stats"
+    namespace: "media_audio"
+    description:
+        "Add power stats tracking and management."
+    bug: "350114693"
 }
 
 flag {

@@ -18,13 +18,13 @@
 //#define LOG_NDEBUG 0
 
 #include "ParameterManagerWrapper.h"
+#include <ParameterMgrFullConnector.h>
 #include <ParameterMgrPlatformConnector.h>
 #include <SelectionCriterionTypeInterface.h>
 #include <SelectionCriterionInterface.h>
 #include <media/convert.h>
 #include <algorithm>
 #include <cutils/bitops.h>
-#include <cutils/config_utils.h>
 #include <cutils/misc.h>
 #include <fstream>
 #include <limits>
@@ -64,30 +64,9 @@ using utilities::convertTo;
 namespace audio_policy {
 
 const char *const ParameterManagerWrapper::mPolicyPfwDefaultConfFileName =
-    "/etc/parameter-framework/ParameterFrameworkConfigurationPolicy.xml";
+    "/etc/parameter-framework/ParameterFrameworkConfigurationCap.xml";
 const char *const ParameterManagerWrapper::mPolicyPfwVendorConfFileName =
     "/vendor/etc/parameter-framework/ParameterFrameworkConfigurationPolicy.xml";
-
-static const char *const gInputDeviceCriterionName = "AvailableInputDevices";
-static const char *const gOutputDeviceCriterionName = "AvailableOutputDevices";
-static const char *const gPhoneStateCriterionName = "TelephonyMode";
-static const char *const gOutputDeviceAddressCriterionName = "AvailableOutputDevicesAddresses";
-static const char *const gInputDeviceAddressCriterionName = "AvailableInputDevicesAddresses";
-
-/**
- * Order MUST be align with defintiion of audio_policy_force_use_t within audio_policy.h
- */
-static const char *const gForceUseCriterionTag[AUDIO_POLICY_FORCE_USE_CNT] =
-{
-    [AUDIO_POLICY_FORCE_FOR_COMMUNICATION] =        "ForceUseForCommunication",
-    [AUDIO_POLICY_FORCE_FOR_MEDIA] =                "ForceUseForMedia",
-    [AUDIO_POLICY_FORCE_FOR_RECORD] =               "ForceUseForRecord",
-    [AUDIO_POLICY_FORCE_FOR_DOCK] =                 "ForceUseForDock",
-    [AUDIO_POLICY_FORCE_FOR_SYSTEM] =               "ForceUseForSystem",
-    [AUDIO_POLICY_FORCE_FOR_HDMI_SYSTEM_AUDIO] =    "ForceUseForHdmiSystemAudio",
-    [AUDIO_POLICY_FORCE_FOR_ENCODED_SURROUND] =     "ForceUseForEncodedSurround",
-    [AUDIO_POLICY_FORCE_FOR_VIBRATE_RINGING] =      "ForceUseForVibrateRinging"
-};
 
 template <>
 struct ParameterManagerWrapper::parameterManagerElementSupported<ISelectionCriterionInterface> {};
@@ -100,9 +79,9 @@ ParameterManagerWrapper::ParameterManagerWrapper(bool enableSchemaVerification,
 {
     // Connector
     if (access(mPolicyPfwVendorConfFileName, R_OK) == 0) {
-        mPfwConnector = new CParameterMgrPlatformConnector(mPolicyPfwVendorConfFileName);
+        mPfwConnector = new CParameterMgrFullConnector(mPolicyPfwVendorConfFileName);
     } else {
-        mPfwConnector = new CParameterMgrPlatformConnector(mPolicyPfwDefaultConfFileName);
+        mPfwConnector = new CParameterMgrFullConnector(mPolicyPfwDefaultConfFileName);
     }
 
     // Logger
@@ -130,13 +109,13 @@ status_t ParameterManagerWrapper::addCriterion(const std::string &name, bool isI
               std::get<2>(pair).c_str(), name.c_str());
         criterionType->addValuePair(std::get<0>(pair), std::get<2>(pair), error);
 
-        if (name == gOutputDeviceCriterionName) {
+        if (name == capEngineConfig::gOutputDeviceCriterionName) {
             ALOGV("%s: Adding mOutputDeviceToCriterionTypeMap %d %" PRIu64" for criterionType %s",
                   __func__, std::get<1>(pair), std::get<0>(pair), name.c_str());
             audio_devices_t androidType = static_cast<audio_devices_t>(std::get<1>(pair));
             mOutputDeviceToCriterionTypeMap[androidType] = std::get<0>(pair);
         }
-        if (name == gInputDeviceCriterionName) {
+        if (name == capEngineConfig::gInputDeviceCriterionName) {
             ALOGV("%s: Adding mInputDeviceToCriterionTypeMap %d %" PRIu64" for criterionType %s",
                   __func__, std::get<1>(pair), std::get<0>(pair), name.c_str());
             audio_devices_t androidType = static_cast<audio_devices_t>(std::get<1>(pair));
@@ -207,10 +186,11 @@ bool ParameterManagerWrapper::isStarted()
 
 status_t ParameterManagerWrapper::setPhoneState(audio_mode_t mode)
 {
-    ISelectionCriterionInterface *criterion =
-            getElement<ISelectionCriterionInterface>(gPhoneStateCriterionName, mPolicyCriteria);
+    ISelectionCriterionInterface *criterion = getElement<ISelectionCriterionInterface>(
+            capEngineConfig::gPhoneStateCriterionName, mPolicyCriteria);
     if (criterion == NULL) {
-        ALOGE("%s: no criterion found for %s", __FUNCTION__, gPhoneStateCriterionName);
+        ALOGE("%s: no criterion found for %s", __FUNCTION__,
+              capEngineConfig::gPhoneStateCriterionName);
         return BAD_VALUE;
     }
     if (!isValueValidForCriterion(criterion, static_cast<int>(mode))) {
@@ -223,10 +203,11 @@ status_t ParameterManagerWrapper::setPhoneState(audio_mode_t mode)
 
 audio_mode_t ParameterManagerWrapper::getPhoneState() const
 {
-    const ISelectionCriterionInterface *criterion =
-            getElement<ISelectionCriterionInterface>(gPhoneStateCriterionName, mPolicyCriteria);
+    const ISelectionCriterionInterface *criterion = getElement<ISelectionCriterionInterface>(
+            capEngineConfig::gPhoneStateCriterionName, mPolicyCriteria);
     if (criterion == NULL) {
-        ALOGE("%s: no criterion found for %s", __FUNCTION__, gPhoneStateCriterionName);
+        ALOGE("%s: no criterion found for %s", __FUNCTION__,
+              capEngineConfig::gPhoneStateCriterionName);
         return AUDIO_MODE_NORMAL;
     }
     return static_cast<audio_mode_t>(criterion->getCriterionState());
@@ -240,10 +221,11 @@ status_t ParameterManagerWrapper::setForceUse(audio_policy_force_use_t usage,
         return BAD_VALUE;
     }
 
-    ISelectionCriterionInterface *criterion =
-            getElement<ISelectionCriterionInterface>(gForceUseCriterionTag[usage], mPolicyCriteria);
+    ISelectionCriterionInterface *criterion = getElement<ISelectionCriterionInterface>(
+            capEngineConfig::gForceUseCriterionTag[usage], mPolicyCriteria);
     if (criterion == NULL) {
-        ALOGE("%s: no criterion found for %s", __FUNCTION__, gForceUseCriterionTag[usage]);
+        ALOGE("%s: no criterion found for %s", __FUNCTION__,
+              capEngineConfig::gForceUseCriterionTag[usage]);
         return BAD_VALUE;
     }
     if (!isValueValidForCriterion(criterion, static_cast<int>(config))) {
@@ -260,10 +242,11 @@ audio_policy_forced_cfg_t ParameterManagerWrapper::getForceUse(audio_policy_forc
     if (usage > AUDIO_POLICY_FORCE_USE_CNT) {
         return AUDIO_POLICY_FORCE_NONE;
     }
-    const ISelectionCriterionInterface *criterion =
-            getElement<ISelectionCriterionInterface>(gForceUseCriterionTag[usage], mPolicyCriteria);
+    const ISelectionCriterionInterface *criterion = getElement<ISelectionCriterionInterface>(
+            capEngineConfig::gForceUseCriterionTag[usage], mPolicyCriteria);
     if (criterion == NULL) {
-        ALOGE("%s: no criterion found for %s", __FUNCTION__, gForceUseCriterionTag[usage]);
+        ALOGE("%s: no criterion found for %s", __FUNCTION__,
+              capEngineConfig::gForceUseCriterionTag[usage]);
         return AUDIO_POLICY_FORCE_NONE;
     }
     return static_cast<audio_policy_forced_cfg_t>(criterion->getCriterionState());
@@ -281,8 +264,8 @@ status_t ParameterManagerWrapper::setDeviceConnectionState(
         audio_devices_t type, const std::string &address, audio_policy_dev_state_t state)
 {
     std::string criterionName = audio_is_output_device(type) ?
-                gOutputDeviceAddressCriterionName : gInputDeviceAddressCriterionName;
-
+            capEngineConfig::gOutputDeviceAddressCriterionName :
+            capEngineConfig::gInputDeviceAddressCriterionName;
     ALOGV("%s: device with address %s %s", __FUNCTION__, address.c_str(),
           state != AUDIO_POLICY_DEVICE_STATE_AVAILABLE? "disconnected" : "connected");
     ISelectionCriterionInterface *criterion =
@@ -311,12 +294,12 @@ status_t ParameterManagerWrapper::setDeviceConnectionState(
     return NO_ERROR;
 }
 
-status_t ParameterManagerWrapper::setAvailableInputDevices(const DeviceTypeSet &types)
-{
-    ISelectionCriterionInterface *criterion =
-            getElement<ISelectionCriterionInterface>(gInputDeviceCriterionName, mPolicyCriteria);
+status_t ParameterManagerWrapper::setAvailableInputDevices(const DeviceTypeSet &types) {
+    ISelectionCriterionInterface *criterion = getElement<ISelectionCriterionInterface>(
+            capEngineConfig::gInputDeviceCriterionName, mPolicyCriteria);
     if (criterion == NULL) {
-        ALOGE("%s: no criterion found for %s", __func__, gInputDeviceCriterionName);
+        ALOGE("%s: no criterion found for %s", __func__,
+              capEngineConfig::gInputDeviceCriterionName);
         return DEAD_OBJECT;
     }
     criterion->setCriterionState(convertDeviceTypesToCriterionValue(types));
@@ -324,12 +307,12 @@ status_t ParameterManagerWrapper::setAvailableInputDevices(const DeviceTypeSet &
     return NO_ERROR;
 }
 
-status_t ParameterManagerWrapper::setAvailableOutputDevices(const DeviceTypeSet &types)
-{
-    ISelectionCriterionInterface *criterion =
-            getElement<ISelectionCriterionInterface>(gOutputDeviceCriterionName, mPolicyCriteria);
+status_t ParameterManagerWrapper::setAvailableOutputDevices(const DeviceTypeSet &types) {
+    ISelectionCriterionInterface *criterion = getElement<ISelectionCriterionInterface>(
+            capEngineConfig::gOutputDeviceCriterionName, mPolicyCriteria);
     if (criterion == NULL) {
-        ALOGE("%s: no criterion found for %s", __func__, gOutputDeviceCriterionName);
+        ALOGE("%s: no criterion found for %s", __func__,
+              capEngineConfig::gOutputDeviceCriterionName);
         return DEAD_OBJECT;
     }
     criterion->setCriterionState(convertDeviceTypesToCriterionValue(types));
@@ -344,21 +327,15 @@ void ParameterManagerWrapper::applyPlatformConfiguration()
 
 uint64_t ParameterManagerWrapper::convertDeviceTypeToCriterionValue(audio_devices_t type) const {
     bool isOut = audio_is_output_devices(type);
-    uint32_t typeMask = isOut ? type : (type & ~AUDIO_DEVICE_BIT_IN);
-
     const auto &adapters = isOut ? mOutputDeviceToCriterionTypeMap : mInputDeviceToCriterionTypeMap;
-    // Only multibit devices need adaptation.
-    if (popcount(typeMask) > 1) {
-        const auto &adapter = adapters.find(type);
-        if (adapter != adapters.end()) {
-            ALOGV("%s: multibit device %d converted to criterion %" PRIu64, __func__, type,
-                  adapter->second);
-            return adapter->second;
-        }
-        ALOGE("%s: failed to find map for multibit device %d", __func__, type);
-        return 0;
+    const auto &adapter = adapters.find(type);
+    if (adapter != adapters.end()) {
+        ALOGV("%s: multibit device %d converted to criterion %" PRIu64, __func__, type,
+              adapter->second);
+        return adapter->second;
     }
-    return typeMask;
+    ALOGE("%s: failed to find map for multibit device %d", __func__, type);
+    return 0;
 }
 
 uint64_t ParameterManagerWrapper::convertDeviceTypesToCriterionValue(
@@ -380,6 +357,89 @@ DeviceTypeSet ParameterManagerWrapper::convertDeviceCriterionValueToDeviceTypes(
         }
     }
     return deviceTypes;
+}
+
+void ParameterManagerWrapper::createDomain(const std::string &domain)
+{
+    std::string error;
+    bool ret = mPfwConnector->createDomain(domain, error);
+    if (!ret) {
+        ALOGD("%s: failed to create domain %s (error=%s)", __func__, domain.c_str(),
+        error.c_str());
+    }
+}
+
+void ParameterManagerWrapper::addConfigurableElementToDomain(const std::string &domain,
+        const std::string &elementPath)
+{
+    std::string error;
+    bool ret = mPfwConnector->addConfigurableElementToDomain(domain, elementPath, error);
+    ALOGE_IF(!ret, "%s: failed to add parameter %s for domain %s (error=%s)",
+              __func__, elementPath.c_str(), domain.c_str(), error.c_str());
+}
+
+void ParameterManagerWrapper::createConfiguration(const std::string &domain,
+        const std::string &configurationName)
+{
+    std::string error;
+    bool ret = mPfwConnector->createConfiguration(domain, configurationName, error);
+    ALOGE_IF(!ret, "%s: failed to create configuration %s for domain %s (error=%s)",
+              __func__, configurationName.c_str(), domain.c_str(), error.c_str());
+}
+
+void ParameterManagerWrapper::setApplicationRule(
+        const std::string &domain, const std::string &configurationName, const std::string &rule)
+{
+    std::string error;
+    bool ret = mPfwConnector->setApplicationRule(domain, configurationName, rule, error);
+    ALOGE_IF(!ret, "%s: failed to set rule %s for domain %s and configuration %s (error=%s)",
+              __func__, rule.c_str(), domain.c_str(), configurationName.c_str(), error.c_str());
+}
+
+void ParameterManagerWrapper::accessConfigurationValue(const std::string &domain,
+        const std::string &configurationName, const std::string &elementPath,
+        std::string &value)
+{
+    std::string error;
+    bool ret = mPfwConnector->accessConfigurationValue(domain, configurationName, elementPath,
+            value, /*set=*/ true, error);
+    ALOGE_IF(!ret, "%s: failed to set value %s for parameter %s on domain %s and configuration %s "
+          "(error=%s)", __func__, value.c_str(), elementPath.c_str(),  domain.c_str(),
+          configurationName.c_str(), error.c_str());
+}
+
+status_t ParameterManagerWrapper::setConfiguration(
+        const android::capEngineConfig::ParsingResult& capSettings)
+{
+    if (!isStarted()) {
+        return NO_INIT;
+    }
+    std::string error;
+    if (!mPfwConnector->setTuningMode(/* bOn= */ true, error)) {
+        ALOGD("%s: failed to set Tuning Mode error=%s", __FUNCTION__, error.c_str());
+        return DEAD_OBJECT;
+    }
+    for (auto &domain: capSettings.parsedConfig->capConfigurableDomains) {
+        createDomain(domain.name);
+        for (const auto &configurableElementValue : domain.settings[0].configurableElementValues) {
+            addConfigurableElementToDomain(domain.name,
+                    configurableElementValue.configurableElement.path);
+        }
+        for (const auto &configuration : domain.configurations) {
+            createConfiguration(domain.name, configuration.name);
+            setApplicationRule(domain.name, configuration.name, configuration.rule);
+        }
+        for (const auto &setting : domain.settings) {
+            for (const auto &configurableElementValue : setting.configurableElementValues) {
+                std::string value = configurableElementValue.value;
+                accessConfigurationValue(domain.name, setting.configurationName,
+                        configurableElementValue.configurableElement.path, value);
+            }
+
+        }
+    }
+    mPfwConnector->setTuningMode(/* bOn= */ false, error);
+    return OK;
 }
 
 } // namespace audio_policy

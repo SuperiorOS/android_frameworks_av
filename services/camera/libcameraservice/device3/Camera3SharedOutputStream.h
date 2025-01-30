@@ -18,8 +18,16 @@
 #define ANDROID_SERVERS_CAMERA3_SHARED_OUTPUT_STREAM_H
 
 #include <array>
-#include "Camera3StreamSplitter.h"
+
+#include "Flags.h"
+
 #include "Camera3OutputStream.h"
+
+#if USE_NEW_STREAM_SPLITTER
+#include "Camera3StreamSplitter.h"
+#else
+#include "deprecated/DeprecatedCamera3StreamSplitter.h"
+#endif  // USE_NEW_STREAM_SPLITTER
 
 namespace android {
 
@@ -106,8 +114,11 @@ private:
      * The Camera3StreamSplitter object this stream uses for stream
      * sharing.
      */
+#if USE_NEW_STREAM_SPLITTER
     sp<Camera3StreamSplitter> mStreamSplitter;
-
+#else
+    sp<DeprecatedCamera3StreamSplitter> mStreamSplitter;
+#endif  // USE_NEW_STREAM_SPLITTER
     /**
      * Initialize stream splitter.
      */

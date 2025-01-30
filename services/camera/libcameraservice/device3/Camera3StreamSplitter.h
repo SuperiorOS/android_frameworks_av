@@ -22,7 +22,7 @@
 #include <camera/CameraMetadata.h>
 
 #include <gui/IConsumerListener.h>
-#include <gui/IProducerListener.h>
+#include <gui/Surface.h>
 #include <gui/BufferItemConsumer.h>
 
 #include <utils/Condition.h>
@@ -159,7 +159,7 @@ private:
     // the IProducerListener::onBufferReleased callback is associated with. We
     // create one of these per output BufferQueue, and then pass the producer
     // into onBufferReleasedByOutput above.
-    class OutputListener : public BnProducerListener,
+    class OutputListener : public SurfaceListener,
                            public IBinder::DeathRecipient {
     public:
         OutputListener(wp<Camera3StreamSplitter> splitter,
@@ -168,6 +168,9 @@ private:
 
         // From IProducerListener
         void onBufferReleased() override;
+        bool needsReleaseNotify() override { return true; };
+        void onBuffersDiscarded(const std::vector<sp<GraphicBuffer>>& /*buffers*/) override {};
+        void onBufferDetached(int /*slot*/) override {}
 
         // From IBinder::DeathRecipient
         void binderDied(const wp<IBinder>& who) override;

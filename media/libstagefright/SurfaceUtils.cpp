@@ -335,7 +335,7 @@ status_t nativeWindowConnect(ANativeWindow *surface, const char *reason) {
 }
 
 status_t surfaceConnectWithListener(
-        const sp<Surface> &surface, sp<IProducerListener> listener, const char *reason) {
+        const sp<Surface> &surface, sp<SurfaceListener> listener, const char *reason) {
     ALOGD("connecting to surface %p, reason %s", surface.get(), reason);
 
     status_t err = surface->connect(NATIVE_WINDOW_API_MEDIA, listener);

@@ -37,7 +37,6 @@ const int kKeySetIdLength = 16;
 const int kSecureStopIdStart = 100;
 const std::string kOfflineLicense("\"type\":\"persistent-license\"");
 const std::string kStreaming("Streaming");
-const std::string kTemporaryLicense("\"type\":\"temporary\"");
 const std::string kTrue("True");
 
 const std::string kQueryKeyLicenseType("LicenseType");

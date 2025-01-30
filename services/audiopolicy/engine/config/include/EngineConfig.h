@@ -71,6 +71,7 @@ using VolumeGroups = std::vector<VolumeGroup>;
 
 struct ProductStrategy {
     std::string name;
+    int id;
     AttributesGroups attributesGroups;
 };
 

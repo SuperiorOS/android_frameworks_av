@@ -46,7 +46,6 @@
 #include <media/stagefright/Utils.h>
 
 #include <gui/GLConsumer.h>
-#include <gui/IProducerListener.h>
 #include <gui/Surface.h>
 #include <gui/SurfaceComposerClient.h>
 
@@ -91,7 +90,7 @@ private:
     std::shared_ptr<Listener> mListener;
     std::shared_ptr<C2Component> mComponent;
 
-    sp<IProducerListener> mProducerListener;
+    sp<SurfaceListener> mSurfaceListener;
 
     std::atomic_int mLinearPoolId;
 
@@ -138,7 +137,7 @@ private:
 
 SimplePlayer::SimplePlayer()
     : mListener(new Listener(this)),
-      mProducerListener(new StubProducerListener),
+      mSurfaceListener(new StubSurfaceListener),
       mLinearPoolId(C2BlockPool::PLATFORM_START),
       mComposerClient(new SurfaceComposerClient) {
     CHECK_EQ(mComposerClient->initCheck(), (status_t)OK);
@@ -164,7 +163,7 @@ SimplePlayer::SimplePlayer()
 
     mSurface = mControl->getSurface();
     CHECK(mSurface != nullptr);
-    mSurface->connect(NATIVE_WINDOW_API_CPU, mProducerListener);
+    mSurface->connect(NATIVE_WINDOW_API_CPU, mSurfaceListener);
 }
 
 SimplePlayer::~SimplePlayer() {

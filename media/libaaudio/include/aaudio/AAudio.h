@@ -574,7 +574,7 @@ enum {
      * For privacy, the following usages can not be recorded: AAUDIO_VOICE_COMMUNICATION*,
      * AAUDIO_USAGE_NOTIFICATION*, AAUDIO_USAGE_ASSISTANCE* and {@link #AAUDIO_USAGE_ASSISTANT}.
      *
-     * On <a href="/reference/android/os/Build.VERSION_CODES#Q">Build.VERSION_CODES</a>,
+     * On <a href="/reference/android/os/Build.VERSION_CODES#Q">Q</a>,
      * this means only {@link #AAUDIO_USAGE_MEDIA} and {@link #AAUDIO_USAGE_GAME} may be captured.
      *
      * See <a href="/reference/android/media/AudioAttributes.html#ALLOW_CAPTURE_BY_ALL">

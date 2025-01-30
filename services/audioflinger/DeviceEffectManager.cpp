@@ -71,10 +71,15 @@ void DeviceEffectManager::onCreateAudioPatch(audio_patch_handle_t handle,
 
 void DeviceEffectManager::onReleaseAudioPatch(audio_patch_handle_t handle) {
     ALOGV("%s", __func__);
+    // Keep a reference on disconnected handle to delay destruction without lock held.
+    std::vector<sp<IAfEffectHandle>> disconnectedHandles{};
     audio_utils::lock_guard _l(mutex());
     for (auto& effectProxies : mDeviceEffects) {
         for (auto& effect : effectProxies.second) {
-            effect->onReleasePatch(handle);
+            sp<IAfEffectHandle> disconnectedHandle = effect->onReleasePatch(handle);
+            if (disconnectedHandle != nullptr) {
+                disconnectedHandles.push_back(std::move(disconnectedHandle));
+            }
         }
     }
 }

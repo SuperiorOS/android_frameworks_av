@@ -143,6 +143,18 @@ public:
     void onReleased(uint32_t generation);
 
     /**
+     * Notifies when a Buffer is attached to Graphics(consumer side).
+     * If generation does not match to the current, notifications via the interface
+     * will be ignored. (In the case, the notifications are from one of the old surfaces
+     * which is no longer used.)
+     * One onReleased() should be ignored for one onAttached() when both of
+     * them have the same generation as params.
+     *
+     * @param[in] generation    generation id for specifying Graphics(BQ)
+     */
+    void onAttached(uint32_t generation);
+
+    /**
      * Get waitable fd for events.(allocate is ready, end of life cycle)
      *
      * @param[out]  pipeFd      a file descriptor created from pipe2()
@@ -217,9 +229,11 @@ private:
 
         BlockedSlot mBlockedSlots[kNumSlots];
 
-        BufferCache() : mBqId{0ULL}, mGeneration{0}, mIgbp{nullptr} {}
+        std::atomic<int> mNumAttached;
+
+        BufferCache() : mBqId{0ULL}, mGeneration{0}, mIgbp{nullptr}, mNumAttached{0} {}
         BufferCache(uint64_t bqId, uint32_t generation, const sp<IGraphicBufferProducer>& igbp) :
-            mBqId{bqId}, mGeneration{generation}, mIgbp{igbp} {}
+            mBqId{bqId}, mGeneration{generation}, mIgbp{igbp}, mNumAttached{0} {}
 
         ~BufferCache();
 

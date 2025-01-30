@@ -17,6 +17,7 @@
 #ifndef ANDROID_SERVERS_CAMERA3_STREAM_INTERFACE_H
 #define ANDROID_SERVERS_CAMERA3_STREAM_INTERFACE_H
 
+#include <gui/Flags.h>
 #include <utils/RefBase.h>
 
 #include <camera/camera2/OutputConfiguration.h>
@@ -435,12 +436,14 @@ class Camera3StreamInterface : public virtual RefBase {
      */
     virtual status_t returnInputBuffer(const camera_stream_buffer &buffer) = 0;
 
+#if !WB_CAMERA3_AND_PROCESSORS_WITH_DEPENDENCIES
     /**
      * Get the buffer producer of the input buffer queue.
      *
      * This method only applies to input streams.
      */
     virtual status_t getInputBufferProducer(sp<IGraphicBufferProducer> *producer) = 0;
+#endif
 
     /**
      * Whether any of the stream's buffers are currently in use by the HAL,

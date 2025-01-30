@@ -260,6 +260,7 @@ status_t PatchPanel::createAudioPatch_l(const struct audio_patch* patch,
                     if (patch->sinks[0].config_mask & AUDIO_PORT_CONFIG_FLAGS) {
                         flags = patch->sinks[0].flags.output;
                     }
+                    audio_attributes_t attributes = AUDIO_ATTRIBUTES_INITIALIZER;
                     const sp<IAfThreadBase> thread = mAfPatchPanelCallback->openOutput_l(
                                                             patch->sinks[0].ext.device.hw_module,
                                                             &output,
@@ -267,7 +268,8 @@ status_t PatchPanel::createAudioPatch_l(const struct audio_patch* patch,
                                                             &mixerConfig,
                                                             outputDevice,
                                                             outputDeviceAddress,
-                                                            flags);
+                                                            flags,
+                                                            attributes);
                     ALOGV("mAfPatchPanelCallback->openOutput_l() returned %p", thread.get());
                     if (thread == 0) {
                         status = NO_MEMORY;
@@ -647,7 +649,8 @@ status_t PatchPanel::Patch::createConnections_l(const sp<IAfPatchPanel>& panel)
                                            outputFlags,
                                            {} /*timeout*/,
                                            frameCountToBeReady,
-                                           1.0f);
+                                           1.0f /*speed*/,
+                                           1.0f /*volume*/);
     status = mPlayback.checkTrack(tempPatchTrack.get());
     if (status != NO_ERROR) {
         return status;

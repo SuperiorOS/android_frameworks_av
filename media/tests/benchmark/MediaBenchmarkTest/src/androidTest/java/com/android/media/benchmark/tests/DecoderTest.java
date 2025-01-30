@@ -46,6 +46,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
@@ -118,7 +119,7 @@ public class DecoderTest {
     }
 
     @Test(timeout = PER_TEST_TIMEOUT_MS)
-    public void testDecoder() throws IOException {
+    public void testDecoder() throws IOException, InterruptedException {
         File inputFile = new File(mInputFilePath + mInputFile);
         assertTrue("Cannot find " + mInputFile + " in directory " + mInputFilePath,
                 inputFile.exists());
@@ -133,7 +134,7 @@ public class DecoderTest {
             extractor.selectExtractorTrack(currentTrack);
             MediaFormat format = extractor.getFormat(currentTrack);
             String mime = format.getString(MediaFormat.KEY_MIME);
-            ArrayList<String> mediaCodecs = CodecUtils.selectCodecs(mime, false);
+            List<String> mediaCodecs = CodecUtils.selectCodecs(mime, false);
             assertTrue("No suitable codecs found for file: " + mInputFile + " track : " +
                     currentTrack + " mime: " + mime, (mediaCodecs.size() > 0));
 
@@ -205,7 +206,7 @@ public class DecoderTest {
             extractor.selectExtractorTrack(currentTrack);
             MediaFormat format = extractor.getFormat(currentTrack);
             String mime = format.getString(MediaFormat.KEY_MIME);
-            ArrayList<String> mediaCodecs = CodecUtils.selectCodecs(mime, false);
+            List<String> mediaCodecs = CodecUtils.selectCodecs(mime, false);
             for (String codecName : mediaCodecs) {
                 Log.i("Test: %s\n", mInputFile);
                 Native nativeDecoder = new Native();

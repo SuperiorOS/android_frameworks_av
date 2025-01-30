@@ -32,9 +32,8 @@ class DownmixContext final : public EffectContext {
   public:
     DownmixContext(int statusDepth, const Parameter::Common& common);
     ~DownmixContext();
-    RetCode enable();
-    RetCode disable();
-    void reset();
+    RetCode enable() override;
+    RetCode disable() override;
 
     RetCode setDmType(Downmix::Type type) {
         mType = type;

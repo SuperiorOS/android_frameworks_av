@@ -85,27 +85,6 @@ ndk::ScopedAStatus VisualizerImpl::getDescriptor(Descriptor* _aidl_return) {
     return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus VisualizerImpl::commandImpl(CommandId command) {
-    RETURN_IF(!mContext, EX_NULL_POINTER, "nullContext");
-    switch (command) {
-        case CommandId::START:
-            mContext->enable();
-            break;
-        case CommandId::STOP:
-            mContext->disable();
-            break;
-        case CommandId::RESET:
-            mContext->disable();
-            mContext->resetBuffer();
-            break;
-        default:
-            LOG(ERROR) << __func__ << " commandId " << toString(command) << " not supported";
-            return ndk::ScopedAStatus::fromExceptionCodeWithMessage(EX_ILLEGAL_ARGUMENT,
-                                                                    "commandIdNotSupported");
-    }
-    return ndk::ScopedAStatus::ok();
-}
-
 ndk::ScopedAStatus VisualizerImpl::setParameterSpecific(const Parameter::Specific& specific) {
     RETURN_IF(Parameter::Specific::visualizer != specific.getTag(), EX_ILLEGAL_ARGUMENT,
               "EffectNotSupported");
@@ -222,6 +201,7 @@ std::shared_ptr<EffectContext> VisualizerImpl::createContext(const Parameter::Co
 RetCode VisualizerImpl::releaseContext() {
     if (mContext) {
         mContext->disable();
+        mContext->reset();
         mContext->resetBuffer();
     }
     return RetCode::SUCCESS;

@@ -200,7 +200,8 @@ public class Encoder implements IBufferXfer.IReceiveBuffer {
      * @throws IOException If the codec cannot be created.
      */
     public int encode(String codecName, MediaFormat encodeFormat, String mime, int frameRate,
-                      int sampleRate, int frameSize, boolean asyncMode) throws IOException {
+            int sampleRate, int frameSize, boolean asyncMode)
+            throws IOException, InterruptedException {
         mInputBufferSize = (mInputStream != null) ? mInputStream.getChannel().size() : 0;
         mOffset = 0;
         mFrameRate = frameRate;
@@ -275,12 +276,16 @@ public class Encoder implements IBufferXfer.IReceiveBuffer {
         mStats.setStartTime();
         if (asyncMode) {
             try {
-                synchronized (mLock) { mLock.wait(); }
-                if (mSignalledError) {
-                    return ENCODE_ENCODER_ERROR;
+                synchronized (mLock) {
+                    while (!mSawOutputEOS && !mSignalledError) {
+                        mLock.wait();
+                    }
+                    if (mSignalledError) {
+                        return ENCODE_ENCODER_ERROR;
+                    }
                 }
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                throw e;
             }
         } else {
             while (!mSawOutputEOS && !mSignalledError) {

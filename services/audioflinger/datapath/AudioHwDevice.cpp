@@ -43,7 +43,8 @@ status_t AudioHwDevice::openOutputStream(
         audio_devices_t deviceType,
         audio_output_flags_t flags,
         struct audio_config *config,
-        const char *address)
+        const char *address,
+        const std::vector<playback_track_metadata_v7_t>& sourceMetadata)
 {
 
     struct audio_config originalConfig = *config;
@@ -52,7 +53,7 @@ status_t AudioHwDevice::openOutputStream(
     // Try to open the HAL first using the current format.
     ALOGV("openOutputStream(), try sampleRate %d, format %#x, channelMask %#x", config->sample_rate,
             config->format, config->channel_mask);
-    status_t status = outputStream->open(handle, deviceType, config, address);
+    status_t status = outputStream->open(handle, deviceType, config, address, sourceMetadata);
 
     if (status != NO_ERROR) {
         delete outputStream;
@@ -72,7 +73,8 @@ status_t AudioHwDevice::openOutputStream(
         if (wrapperNeeded) {
             if (SPDIFEncoder::isFormatSupported(originalConfig.format)) {
                 outputStream = new SpdifStreamOut(this, flags, originalConfig.format);
-                status = outputStream->open(handle, deviceType, &originalConfig, address);
+                status = outputStream->open(handle, deviceType, &originalConfig, address,
+                                            sourceMetadata);
                 if (status != NO_ERROR) {
                     ALOGE("ERROR - openOutputStream(), SPDIF open returned %d",
                         status);

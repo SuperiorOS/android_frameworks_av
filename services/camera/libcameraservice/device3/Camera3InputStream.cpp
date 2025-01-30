@@ -18,10 +18,12 @@
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 //#define LOG_NDEBUG 0
 
+#include <camera/StringUtils.h>
+#include <com_android_graphics_libgui_flags.h>
 #include <gui/BufferItem.h>
 #include <utils/Log.h>
 #include <utils/Trace.h>
-#include <camera/StringUtils.h>
+
 #include "Camera3InputStream.h"
 
 namespace android {
@@ -180,6 +182,21 @@ status_t Camera3InputStream::returnInputBufferLocked(
                                  /*output*/false, /*transform*/ -1);
 }
 
+#if WB_CAMERA3_AND_PROCESSORS_WITH_DEPENDENCIES
+status_t Camera3InputStream::getInputSurfaceLocked(sp<Surface> *surface) {
+    ATRACE_CALL();
+
+    if (surface == NULL) {
+        return BAD_VALUE;
+    } else if (mSurface == NULL) {
+        ALOGE("%s: No input stream is configured", __FUNCTION__);
+        return INVALID_OPERATION;
+    }
+
+    *surface = mSurface;
+    return OK;
+}
+#else
 status_t Camera3InputStream::getInputBufferProducerLocked(
             sp<IGraphicBufferProducer> *producer) {
     ATRACE_CALL();
@@ -194,6 +211,7 @@ status_t Camera3InputStream::getInputBufferProducerLocked(
     *producer = mProducer;
     return OK;
 }
+#endif
 
 status_t Camera3InputStream::disconnectLocked() {
 
@@ -239,9 +257,15 @@ status_t Camera3InputStream::configureQueueLocked() {
     mLastTimestamp = 0;
 
     if (mConsumer.get() == 0) {
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+        sp<BufferItemConsumer> bufferItemConsumer = new BufferItemConsumer(mUsage);
+        sp<IGraphicBufferProducer> producer =
+                bufferItemConsumer->getSurface()->getIGraphicBufferProducer();
+#else
         sp<IGraphicBufferProducer> producer;
         sp<IGraphicBufferConsumer> consumer;
         BufferQueue::createBufferQueue(&producer, &consumer);
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
 
         int minUndequeuedBuffers = 0;
         res = producer->query(NATIVE_WINDOW_MIN_UNDEQUEUED_BUFFERS, &minUndequeuedBuffers);
@@ -271,11 +295,24 @@ status_t Camera3InputStream::configureQueueLocked() {
             camera_stream::max_buffers : minBufs;
         // TODO: somehow set the total buffer count when producer connects?
 
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+        mConsumer = bufferItemConsumer;
+        mConsumer->setName(String8::format("Camera3-InputStream-%d", mId));
+        mConsumer->setMaxAcquiredBufferCount(mTotalBufferCount);
+
+#if WB_CAMERA3_AND_PROCESSORS_WITH_DEPENDENCIES
+        mSurface = mConsumer->getSurface();
+#else
+        mProducer = mConsumer->getSurface()->getIGraphicBufferProducer();
+#endif // WB_CAMERA3_AND_PROCESSORS_WITH_DEPENDENCIES
+
+#else
         mConsumer = new BufferItemConsumer(consumer, mUsage,
                                            mTotalBufferCount);
         mConsumer->setName(String8::format("Camera3-InputStream-%d", mId));
 
         mProducer = producer;
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
 
         mConsumer->setBufferFreedListener(this);
     }

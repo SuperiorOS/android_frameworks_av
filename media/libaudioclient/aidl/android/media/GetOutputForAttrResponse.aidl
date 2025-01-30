@@ -39,4 +39,6 @@ parcelable GetOutputForAttrResponse {
     boolean isBitPerfect;
     /** The corrected audio attributes. **/
     AudioAttributes attr;
+    /** initial port volume for the new audio track */
+    float volume;
 }

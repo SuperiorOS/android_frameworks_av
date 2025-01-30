@@ -42,8 +42,6 @@ class EffectReverb final : public EffectImpl {
     IEffect::Status effectProcessImpl(float* in, float* out, int samples)
             REQUIRES(mImplMutex) override;
 
-    ndk::ScopedAStatus commandImpl(CommandId command) REQUIRES(mImplMutex) override;
-
     std::string getEffectName() override { return *mEffectName; }
 
   private:

@@ -28,23 +28,33 @@
 
 void OnAudioDeviceUpdateNotifier::onAudioDeviceUpdate(audio_io_handle_t audioIo,
                                                       audio_port_handle_t deviceId) {
-    std::unique_lock<std::mutex> lock{mMutex};
     ALOGI("%s: audioIo=%d deviceId=%d", __func__, audioIo, deviceId);
-    mAudioIo = audioIo;
-    mDeviceId = deviceId;
+    {
+        std::lock_guard lock(mMutex);
+        mAudioIo = audioIo;
+        mDeviceId = deviceId;
+    }
     mCondition.notify_all();
 }
 
 status_t OnAudioDeviceUpdateNotifier::waitForAudioDeviceCb(audio_port_handle_t expDeviceId) {
-    std::unique_lock<std::mutex> lock{mMutex};
+    std::unique_lock lock(mMutex);
+    android::base::ScopedLockAssertion lock_assertion(mMutex);
     if (mAudioIo == AUDIO_IO_HANDLE_NONE ||
         (expDeviceId != AUDIO_PORT_HANDLE_NONE && expDeviceId != mDeviceId)) {
         mCondition.wait_for(lock, std::chrono::milliseconds(500));
         if (mAudioIo == AUDIO_IO_HANDLE_NONE ||
-            (expDeviceId != AUDIO_PORT_HANDLE_NONE && expDeviceId != mDeviceId))
+            (expDeviceId != AUDIO_PORT_HANDLE_NONE && expDeviceId != mDeviceId)) {
             return TIMED_OUT;
+        }
     }
     return OK;
+}
+
+std::pair<audio_io_handle_t, audio_port_handle_t>
+OnAudioDeviceUpdateNotifier::getLastPortAndDevice() const {
+    std::lock_guard lock(mMutex);
+    return {mAudioIo, mDeviceId};
 }
 
 AudioPlayback::AudioPlayback(uint32_t sampleRate, audio_format_t format,
@@ -147,9 +157,8 @@ status_t AudioPlayback::start() {
 }
 
 void AudioPlayback::onBufferEnd() {
-    std::unique_lock<std::mutex> lock{mMutex};
+    std::lock_guard lock(mMutex);
     mStopPlaying = true;
-    mCondition.notify_all();
 }
 
 status_t AudioPlayback::fillBuffer() {
@@ -187,7 +196,12 @@ status_t AudioPlayback::waitForConsumption(bool testSeek) {
     const int maxTries = MAX_WAIT_TIME_MS / WAIT_PERIOD_MS;
     int counter = 0;
     size_t totalFrameCount = mMemCapacity / mTrack->frameSize();
-    while (!mStopPlaying && counter < maxTries) {
+    bool stopPlaying;
+    {
+        std::lock_guard lock(mMutex);
+        stopPlaying = mStopPlaying;
+    }
+    while (!stopPlaying && counter < maxTries) {
         uint32_t currPosition;
         mTrack->getPosition(&currPosition);
         if (currPosition >= totalFrameCount) counter++;
@@ -213,7 +227,10 @@ status_t AudioPlayback::waitForConsumption(bool testSeek) {
             mTrack->start();
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_PERIOD_MS));
+        std::lock_guard lock(mMutex);
+        stopPlaying = mStopPlaying;
     }
+    std::lock_guard lock(mMutex);
     if (!mStopPlaying && counter == maxTries) return TIMED_OUT;
     return OK;
 }
@@ -228,8 +245,10 @@ status_t AudioPlayback::onProcess(bool testSeek) {
 }
 
 void AudioPlayback::stop() {
-    std::unique_lock<std::mutex> lock{mMutex};
-    mStopPlaying = true;
+    {
+        std::lock_guard lock(mMutex);
+        mStopPlaying = true;
+    }
     if (mState != PLAY_STOPPED && mState != PLAY_NO_INIT) {
         int32_t msec = 0;
         (void)mTrack->pendingDuration(&msec);
@@ -257,10 +276,13 @@ size_t AudioCapture::onMoreData(const AudioRecord::Buffer& buffer) {
         return 0;
     }
 
-    // no more frames to read
-    if (mNumFramesReceived >= mNumFramesToRecord || mStopRecording) {
-        mStopRecording = true;
-        return 0;
+    {
+        std::lock_guard l(mMutex);
+        // no more frames to read
+        if (mNumFramesReceived >= mNumFramesToRecord || mStopRecording) {
+            mStopRecording = true;
+            return 0;
+        }
     }
 
     int64_t timeUs = 0, position = 0, timeNs = 0;
@@ -272,6 +294,7 @@ size_t AudioCapture::onMoreData(const AudioRecord::Buffer& buffer) {
         ts.getBestTimestamp(&position, &timeNs, ExtendedTimestamp::TIMEBASE_MONOTONIC, &location) ==
                 OK) {
         // Use audio timestamp.
+        std::lock_guard l(mMutex);
         timeUs = timeNs / 1000 -
                  (position - mNumFramesReceived + mNumFramesLost) * usPerSec / mSampleRate;
     } else {
@@ -300,6 +323,7 @@ size_t AudioCapture::onMoreData(const AudioRecord::Buffer& buffer) {
         } else {
             numLostBytes = 0;
         }
+        std::lock_guard l(mMutex);
         const int64_t timestampUs =
                 ((1000000LL * mNumFramesReceived) + (mRecord->getSampleRate() >> 1)) /
                 mRecord->getSampleRate();
@@ -313,6 +337,7 @@ size_t AudioCapture::onMoreData(const AudioRecord::Buffer& buffer) {
     if (buffer.size() == 0) {
         ALOGW("Nothing is available from AudioRecord callback buffer");
     } else {
+        std::lock_guard l(mMutex);
         const size_t bufferSize = buffer.size();
         const int64_t timestampUs =
                 ((1000000LL * mNumFramesReceived) + (mRecord->getSampleRate() >> 1)) /
@@ -324,9 +349,12 @@ size_t AudioCapture::onMoreData(const AudioRecord::Buffer& buffer) {
     }
 
     if (tmpQueue.size() > 0) {
-        std::unique_lock<std::mutex> lock{mMutex};
-        for (auto it = tmpQueue.begin(); it != tmpQueue.end(); it++)
-            mBuffersReceived.push_back(std::move(*it));
+        {
+            std::lock_guard lock(mMutex);
+            mBuffersReceived.insert(mBuffersReceived.end(),
+                                    std::make_move_iterator(tmpQueue.begin()),
+                                    std::make_move_iterator(tmpQueue.end()));
+        }
         mCondition.notify_all();
     }
     return buffer.size();
@@ -334,17 +362,24 @@ size_t AudioCapture::onMoreData(const AudioRecord::Buffer& buffer) {
 
 void AudioCapture::onOverrun() {
     ALOGV("received event overrun");
-    mBufferOverrun = true;
 }
 
 void AudioCapture::onMarker(uint32_t markerPosition) {
     ALOGV("received Callback at position %d", markerPosition);
-    mReceivedCbMarkerAtPosition = markerPosition;
+    {
+        std::lock_guard l(mMutex);
+        mReceivedCbMarkerAtPosition = markerPosition;
+    }
+    mMarkerCondition.notify_all();
 }
 
 void AudioCapture::onNewPos(uint32_t markerPosition) {
     ALOGV("received Callback at position %d", markerPosition);
-    mReceivedCbMarkerCount++;
+    {
+        std::lock_guard l(mMutex);
+        mReceivedCbMarkerCount = mReceivedCbMarkerCount.value_or(0) + 1;
+    }
+    mMarkerCondition.notify_all();
 }
 
 void AudioCapture::onNewIAudioRecord() {
@@ -362,20 +397,7 @@ AudioCapture::AudioCapture(audio_source_t inputSource, uint32_t sampleRate, audi
       mFlags(flags),
       mSessionId(sessionId),
       mTransferType(transferType),
-      mAttributes(attributes) {
-    mFrameCount = 0;
-    mNotificationFrames = 0;
-    mNumFramesToRecord = 0;
-    mNumFramesReceived = 0;
-    mNumFramesLost = 0;
-    mBufferOverrun = false;
-    mMarkerPosition = 0;
-    mMarkerPeriod = 0;
-    mReceivedCbMarkerAtPosition = -1;
-    mReceivedCbMarkerCount = 0;
-    mState = REC_NO_INIT;
-    mStopRecording = false;
-}
+      mAttributes(attributes) {}
 
 AudioCapture::~AudioCapture() {
     if (mOutFileFd > 0) close(mOutFileFd);
@@ -484,7 +506,10 @@ status_t AudioCapture::start(AudioSystem::sync_event_t event, audio_session_t tr
 
 status_t AudioCapture::stop() {
     status_t status = OK;
-    mStopRecording = true;
+    {
+        std::lock_guard l(mMutex);
+        mStopRecording = true;
+    }
     if (mState != REC_STOPPED && mState != REC_NO_INIT) {
         if (mInputSource != AUDIO_SOURCE_DEFAULT) {
             bool state = false;
@@ -503,25 +528,32 @@ status_t AudioCapture::obtainBuffer(RawBuffer& buffer) {
     const int maxTries = MAX_WAIT_TIME_MS / WAIT_PERIOD_MS;
     int counter = 0;
     size_t nonContig = 0;
-    while (mNumFramesReceived < mNumFramesToRecord) {
+    int64_t numFramesReceived;
+    {
+        std::lock_guard l(mMutex);
+        numFramesReceived = mNumFramesReceived;
+    }
+    while (numFramesReceived < mNumFramesToRecord) {
         AudioRecord::Buffer recordBuffer;
         recordBuffer.frameCount = mNotificationFrames;
         status_t status = mRecord->obtainBuffer(&recordBuffer, 1, &nonContig);
         if (OK == status) {
             const int64_t timestampUs =
-                    ((1000000LL * mNumFramesReceived) + (mRecord->getSampleRate() >> 1)) /
+                    ((1000000LL * numFramesReceived) + (mRecord->getSampleRate() >> 1)) /
                     mRecord->getSampleRate();
             RawBuffer buff{-1, timestampUs, static_cast<int32_t>(recordBuffer.size())};
             memcpy(buff.mData.get(), recordBuffer.data(), recordBuffer.size());
             buffer = std::move(buff);
-            mNumFramesReceived += recordBuffer.size() / mRecord->frameSize();
+            numFramesReceived += recordBuffer.size() / mRecord->frameSize();
             mRecord->releaseBuffer(&recordBuffer);
             counter = 0;
         } else if (WOULD_BLOCK == status) {
             // if not received a buffer for MAX_WAIT_TIME_MS, something has gone wrong
-            if (counter == maxTries) return TIMED_OUT;
-            counter++;
+            if (counter++ == maxTries) status = TIMED_OUT;
         }
+        std::lock_guard l(mMutex);
+        mNumFramesReceived = numFramesReceived;
+        if (TIMED_OUT == status) return status;
     }
     return OK;
 }
@@ -530,7 +562,8 @@ status_t AudioCapture::obtainBufferCb(RawBuffer& buffer) {
     if (REC_STARTED != mState) return INVALID_OPERATION;
     const int maxTries = MAX_WAIT_TIME_MS / WAIT_PERIOD_MS;
     int counter = 0;
-    std::unique_lock<std::mutex> lock{mMutex};
+    std::unique_lock lock(mMutex);
+    android::base::ScopedLockAssertion lock_assertion(mMutex);
     while (mBuffersReceived.empty() && !mStopRecording && counter < maxTries) {
         mCondition.wait_for(lock, std::chrono::milliseconds(WAIT_PERIOD_MS));
         counter++;
@@ -548,7 +581,12 @@ status_t AudioCapture::obtainBufferCb(RawBuffer& buffer) {
 status_t AudioCapture::audioProcess() {
     RawBuffer buffer;
     status_t status = OK;
-    while (mNumFramesReceived < mNumFramesToRecord && status == OK) {
+    int64_t numFramesReceived;
+    {
+        std::lock_guard l(mMutex);
+        numFramesReceived = mNumFramesReceived;
+    }
+    while (numFramesReceived < mNumFramesToRecord && status == OK) {
         if (mTransferType == AudioRecord::TRANSFER_CALLBACK)
             status = obtainBufferCb(buffer);
         else
@@ -557,8 +595,50 @@ status_t AudioCapture::audioProcess() {
             const char* ptr = static_cast<const char*>(static_cast<void*>(buffer.mData.get()));
             write(mOutFileFd, ptr, buffer.mCapacity);
         }
+        std::lock_guard l(mMutex);
+        numFramesReceived = mNumFramesReceived;
     }
     return OK;
+}
+
+uint32_t AudioCapture::getMarkerPeriod() const {
+    std::lock_guard l(mMutex);
+    return mMarkerPeriod;
+}
+
+uint32_t AudioCapture::getMarkerPosition() const {
+    std::lock_guard l(mMutex);
+    return mMarkerPosition;
+}
+
+void AudioCapture::setMarkerPeriod(uint32_t markerPeriod) {
+    std::lock_guard l(mMutex);
+    mMarkerPeriod = markerPeriod;
+}
+
+void AudioCapture::setMarkerPosition(uint32_t markerPosition) {
+    std::lock_guard l(mMutex);
+    mMarkerPosition = markerPosition;
+}
+
+uint32_t AudioCapture::waitAndGetReceivedCbMarkerAtPosition() const {
+    std::unique_lock lock(mMutex);
+    android::base::ScopedLockAssertion lock_assertion(mMutex);
+    mMarkerCondition.wait_for(lock, std::chrono::seconds(3), [this]() {
+        android::base::ScopedLockAssertion lock_assertion(mMutex);
+        return mReceivedCbMarkerAtPosition.has_value();
+    });
+    return mReceivedCbMarkerAtPosition.value_or(~0);
+}
+
+uint32_t AudioCapture::waitAndGetReceivedCbMarkerCount() const {
+    std::unique_lock lock(mMutex);
+    android::base::ScopedLockAssertion lock_assertion(mMutex);
+    mMarkerCondition.wait_for(lock, std::chrono::seconds(3), [this]() {
+        android::base::ScopedLockAssertion lock_assertion(mMutex);
+        return mReceivedCbMarkerCount.has_value();
+    });
+    return mReceivedCbMarkerCount.value_or(0);
 }
 
 status_t listAudioPorts(std::vector<audio_port_v7>& portsVec) {

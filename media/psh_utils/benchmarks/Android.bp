@@ -1,0 +1,75 @@
+package {
+    default_team: "trendy_team_android_media_audio_framework",
+    // See: http://go/android-license-faq
+    // A large-scale-change added 'default_applicable_licenses' to import
+    // all of the 'license_kinds' from "frameworks_av_license"
+    // to get the below license kinds:
+    //   SPDX-license-identifier-Apache-2.0
+    default_applicable_licenses: ["frameworks_av_license"],
+}
+
+cc_benchmark {
+    name: "audio_powerstats_benchmark",
+
+    srcs: ["audio_powerstats_benchmark.cpp"],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+    static_libs: [
+        "libpshutils",
+    ],
+    shared_libs: [
+        "libaudioutils",
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "liblog",
+        "libmediautils",
+        "libutils",
+    ],
+}
+
+cc_benchmark {
+    name: "audio_powerstatscollector_benchmark",
+
+    srcs: ["audio_powerstatscollector_benchmark.cpp"],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+    static_libs: [
+        "libpshutils",
+    ],
+    shared_libs: [
+        "libaudioutils",
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "liblog",
+        "libmediautils",
+        "libutils",
+    ],
+}
+
+cc_benchmark {
+    name: "audio_token_benchmark",
+
+    srcs: ["audio_token_benchmark.cpp"],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+    static_libs: [
+        "libpshutils",
+    ],
+    shared_libs: [
+        "libaudioutils",
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "liblog",
+        "libmediautils",
+        "libutils",
+    ],
+}

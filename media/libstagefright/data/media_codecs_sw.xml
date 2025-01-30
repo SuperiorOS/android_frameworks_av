@@ -332,7 +332,7 @@
                 <!-- profiles and levels:  ProfileBaseline : Level3 -->
                 <Limit name="block-count" range="1-1620" />
                 <Limit name="blocks-per-second" range="1-40500" />
-                <Limit name="bitrate" range="1-2000000" />
+                <Limit name="bitrate" range="1-10000000" />
             </Variant>
             <Feature name="intra-refresh" />
             <!-- Video Quality control -->

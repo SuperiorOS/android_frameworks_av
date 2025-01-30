@@ -91,7 +91,6 @@ typedef enum acamera_metadata_section {
     ACAMERA_AUTOMOTIVE_LENS,
     ACAMERA_EXTENSION,
     ACAMERA_JPEGR,
-    ACAMERA_EFV,
     ACAMERA_SECTION_COUNT,
 
     ACAMERA_VENDOR = 0x8000
@@ -139,7 +138,6 @@ typedef enum acamera_metadata_section_start {
     ACAMERA_AUTOMOTIVE_LENS_START  = ACAMERA_AUTOMOTIVE_LENS   << 16,
     ACAMERA_EXTENSION_START        = ACAMERA_EXTENSION         << 16,
     ACAMERA_JPEGR_START            = ACAMERA_JPEGR             << 16,
-    ACAMERA_EFV_START              = ACAMERA_EFV               << 16,
     ACAMERA_VENDOR_START           = ACAMERA_VENDOR            << 16
 } acamera_metadata_section_start_t;
 
@@ -646,9 +644,14 @@ typedef enum acamera_metadata_tag {
      * be made, and for firing pre-capture flash pulses to estimate
      * scene brightness and required final capture flash power, when
      * the flash is enabled.</p>
-     * <p>Normally, this entry should be set to START for only a
-     * single request, and the application should wait until the
-     * sequence completes before starting a new one.</p>
+     * <p>Flash is enabled during precapture sequence when:</p>
+     * <ul>
+     * <li>AE mode is ON_ALWAYS_FLASH</li>
+     * <li>AE mode is ON_AUTO_FLASH and the scene is deemed too dark without flash, or</li>
+     * <li>AE mode is ON and flash mode is TORCH or SINGLE</li>
+     * </ul>
+     * <p>Normally, this entry should be set to START for only single request, and the
+     * application should wait until the sequence completes before starting a new one.</p>
      * <p>When a precapture metering sequence is finished, the camera device
      * may lock the auto-exposure routine internally to be able to accurately expose the
      * subsequent still capture image (<code>ACAMERA_CONTROL_CAPTURE_INTENT == STILL_CAPTURE</code>).
@@ -2289,8 +2292,6 @@ typedef enum acamera_metadata_tag {
      * boost when the light level threshold is exceeded.</p>
      * <p>This state indicates when low light boost is 'ACTIVE' and applied. Similarly, it can
      * indicate when it is not being applied by returning 'INACTIVE'.</p>
-     * <p>This key will be absent from the CaptureResult if AE mode is not set to
-     * 'ON_LOW_LIGHT_BOOST_BRIGHTNESS_PRIORITY.</p>
      * <p>The default value will always be 'INACTIVE'.</p>
      */
     ACAMERA_CONTROL_LOW_LIGHT_BOOST_STATE =                     // byte (acamera_metadata_enum_android_control_low_light_boost_state_t)
@@ -2448,6 +2449,13 @@ typedef enum acamera_metadata_tag {
      * in ACAMERA_FLASH_SINGLE_STRENGTH_DEFAULT_LEVEL.
      * If ACAMERA_CONTROL_AE_MODE is set to any of <code>ON_AUTO_FLASH</code>, <code>ON_ALWAYS_FLASH</code>,
      * <code>ON_AUTO_FLASH_REDEYE</code>, <code>ON_EXTERNAL_FLASH</code> values, then the strengthLevel will be ignored.</p>
+     * <p>When AE mode is ON and flash mode is TORCH or SINGLE, the application should make sure
+     * the AE mode, flash mode, and flash strength level remain the same between precapture
+     * trigger request and final capture request. The flash strength level being set during
+     * precapture sequence is used by the camera device as a reference. The actual strength
+     * may be less, and the auto-exposure routine makes sure proper conversions of sensor
+     * exposure time and sensitivities between precapture and final capture for the specified
+     * strength level.</p>
      *
      * @see ACAMERA_CONTROL_AE_MODE
      * @see ACAMERA_FLASH_MODE
@@ -11560,7 +11568,6 @@ typedef enum acamera_metadata_enum_acamera_jpegr_available_jpeg_r_stream_configu
                                                                       = 1,
 
 } acamera_metadata_enum_android_jpegr_available_jpeg_r_stream_configurations_maximum_resolution_t;
-
 
 
 

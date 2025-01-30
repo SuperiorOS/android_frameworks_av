@@ -19,6 +19,7 @@
 
 #include "ProductStrategy.h"
 
+#include <android/media/audio/common/AudioHalProductStrategy.h>
 #include <media/AudioProductStrategy.h>
 #include <media/TypeConverter.h>
 #include <utils/String8.h>
@@ -30,11 +31,20 @@
 
 namespace android {
 
-ProductStrategy::ProductStrategy(const std::string &name) :
+using media::audio::common::AudioHalProductStrategy;
+
+/*
+ * Note on the id: either is provided (legacy strategies have hard coded id, aidl have
+ * own id, enforced to be started from VENDOR_STRATEGY_ID_START.
+ * REROUTING & PATCH system strategies are added.
+ * To prevent from collision, generate from VENDOR_STRATEGY_ID_START when id is not provided.
+ */
+ProductStrategy::ProductStrategy(const std::string &name, int id) :
     mName(name),
-    mId(static_cast<product_strategy_t>(HandleGenerator<uint32_t>::getNextHandle()))
-{
-}
+    mId((static_cast<product_strategy_t>(id) != PRODUCT_STRATEGY_NONE) ?
+            static_cast<product_strategy_t>(id) :
+            static_cast<product_strategy_t>(AudioHalProductStrategy::VENDOR_STRATEGY_ID_START +
+                    HandleGenerator<uint32_t>::getNextHandle())) {}
 
 void ProductStrategy::addAttributes(const VolumeGroupAttributes &volumeGroupAttributes)
 {

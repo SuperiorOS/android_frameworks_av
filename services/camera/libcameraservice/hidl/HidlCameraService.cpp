@@ -26,6 +26,7 @@
 #include <hidl/HidlTransportSupport.h>
 
 #include <camera/CameraUtils.h>
+#include <utils/AttributionAndPermissionUtils.h>
 #include <utils/Utils.h>
 
 namespace android {
@@ -68,10 +69,15 @@ HidlCameraService::getCameraCharacteristics(const hidl_string& cameraId,
                                             getCameraCharacteristics_cb _hidl_cb) {
     android::CameraMetadata cameraMetadata;
     HStatus status = HStatus::NO_ERROR;
+    AttributionSourceState clientAttribution =
+            AttributionAndPermissionUtils::buildAttributionSource(
+                    hardware::ICameraService::USE_CALLING_PID,
+                    hardware::ICameraService::USE_CALLING_UID,
+                    kDefaultDeviceId);
     binder::Status serviceRet =
         mAidlICameraService->getCameraCharacteristics(cameraId,
                 /*targetSdkVersion*/__ANDROID_API_FUTURE__, ROTATION_OVERRIDE_NONE,
-                kDefaultDeviceId, 0, &cameraMetadata);
+                clientAttribution, 0, &cameraMetadata);
     HCameraMetadata hidlMetadata;
     if (!serviceRet.isOk()) {
         switch(serviceRet.serviceSpecificErrorCode()) {
@@ -119,11 +125,17 @@ Return<void> HidlCameraService::connectDevice(const sp<HCameraDeviceCallback>& h
         return Void();
     }
     sp<hardware::camera2::ICameraDeviceCallbacks> callbacks = hybridCallbacks;
+    AttributionSourceState clientAttribution =
+            AttributionAndPermissionUtils::buildAttributionSource(
+                    hardware::ICameraService::USE_CALLING_PID,
+                    hardware::ICameraService::USE_CALLING_UID,
+                    kDefaultDeviceId);
+    clientAttribution.packageName = "";
+    clientAttribution.attributionTag = std::nullopt;
     binder::Status serviceRet = mAidlICameraService->connectDevice(
-            callbacks, cameraId, std::string(), {},
-            hardware::ICameraService::USE_CALLING_UID, 0/*oomScoreOffset*/,
+            callbacks, cameraId, 0/*oomScoreOffset*/,
             /*targetSdkVersion*/__ANDROID_API_FUTURE__, ROTATION_OVERRIDE_NONE,
-            kDefaultDeviceId, /*devicePolicy*/0, /*out*/&deviceRemote);
+            clientAttribution, /*devicePolicy*/0, /*out*/&deviceRemote);
     HStatus status = HStatus::NO_ERROR;
     if (!serviceRet.isOk()) {
         ALOGE("%s: Unable to connect to camera device", __FUNCTION__);

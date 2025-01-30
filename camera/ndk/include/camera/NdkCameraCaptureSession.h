@@ -576,9 +576,7 @@ camera_status_t ACameraCaptureSession_setRepeatingRequest(
  *
  * @param session the capture session of interest
  *
- * @return <ul><li>
- *             {@link ACAMERA_OK} if the method succeeds. captureSequenceId will be filled
- *             if it is not NULL.</li>
+ * @return <ul><li>{@link ACAMERA_OK} if the method succeeds.</li>
  *         <li>{@link ACAMERA_ERROR_INVALID_PARAMETER} if session is NULL.</li>
  *         <li>{@link ACAMERA_ERROR_SESSION_CLOSED} if the capture session has been closed</li>
  *         <li>{@link ACAMERA_ERROR_CAMERA_DISCONNECTED} if the camera device is closed</li>
@@ -617,9 +615,7 @@ camera_status_t ACameraCaptureSession_stopRepeating(ACameraCaptureSession* sessi
  *
  * @param session the capture session of interest
  *
- * @return <ul><li>
- *             {@link ACAMERA_OK} if the method succeeds. captureSequenceId will be filled
- *             if it is not NULL.</li>
+ * @return <ul><li> {@link ACAMERA_OK} if the method succeeds</li>
  *         <li>{@link ACAMERA_ERROR_INVALID_PARAMETER} if session is NULL.</li>
  *         <li>{@link ACAMERA_ERROR_SESSION_CLOSED} if the capture session has been closed</li>
  *         <li>{@link ACAMERA_ERROR_CAMERA_DISCONNECTED} if the camera device is closed</li>

@@ -99,7 +99,6 @@ class CameraManagerGlobal final : public RefBase {
 
   private:
     sp<hardware::ICameraService> mCameraService;
-    const int                    kCameraServicePollDelay = 500000; // 0.5s
     const char*                  kCameraServiceName      = "media.camera";
     Mutex                        mLock;
 

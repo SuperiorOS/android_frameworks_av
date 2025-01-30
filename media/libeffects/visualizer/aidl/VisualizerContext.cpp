@@ -57,7 +57,7 @@ RetCode VisualizerContext::initParams(const Parameter::Common& common) {
 #endif
     mChannelCount = channelCount;
     mCommon = common;
-    std::fill(mCaptureBuf.begin(), mCaptureBuf.end(), 0x80);
+    reset();
     return RetCode::SUCCESS;
 }
 
@@ -77,8 +77,9 @@ RetCode VisualizerContext::disable() {
     return RetCode::SUCCESS;
 }
 
-void VisualizerContext::reset() {
+RetCode VisualizerContext::reset() {
     std::fill(mCaptureBuf.begin(), mCaptureBuf.end(), 0x80);
+    return RetCode::SUCCESS;
 }
 
 RetCode VisualizerContext::setCaptureSamples(int samples) {
@@ -109,7 +110,6 @@ RetCode VisualizerContext::setDownstreamLatency(int latency) {
     mDownstreamLatency = latency;
     return RetCode::SUCCESS;
 }
-
 int VisualizerContext::getDownstreamLatency() {
     return mDownstreamLatency;
 }

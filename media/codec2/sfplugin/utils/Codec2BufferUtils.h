@@ -22,6 +22,7 @@
 #include <C2ParamDef.h>
 
 #include <media/hardware/VideoAPI.h>
+#include <utils/StrongPointer.h>
 #include <utils/Errors.h>
 
 namespace android {
@@ -192,6 +193,61 @@ struct MemoryBlockPool {
 private:
     struct Impl;
     std::shared_ptr<Impl> mImpl;
+};
+
+struct ABuffer;
+struct AMessage;
+
+class GraphicView2MediaImageConverter {
+public:
+    /**
+     * Creates a C2GraphicView <=> MediaImage converter
+     *
+     * \param view C2GraphicView object
+     * \param format buffer format
+     * \param copy whether the converter is used for copy or not
+     */
+    GraphicView2MediaImageConverter(
+            const C2GraphicView &view, const sp<AMessage> &format, bool copy);
+
+    status_t initCheck() const;
+
+    uint32_t backBufferSize() const;
+
+    /**
+     * Wrap C2GraphicView using a MediaImage2. Note that if not wrapped, the content is not mapped
+     * in this function --- the caller should use CopyGraphicView2MediaImage() function to copy the
+     * data into a backing buffer explicitly.
+     *
+     * \return media buffer. This is null if wrapping failed.
+     */
+    sp<ABuffer> wrap() const;
+
+    bool setBackBuffer(const sp<ABuffer> &backBuffer);
+
+    /**
+     * Copy C2GraphicView to MediaImage2.
+     */
+    status_t copyToMediaImage();
+
+    const sp<ABuffer> &imageData() const;
+
+private:
+    status_t mInitCheck;
+
+    const C2GraphicView mView;
+    uint32_t mWidth;
+    uint32_t mHeight;
+    int32_t mClientColorFormat;  ///< SDK color format for MediaImage
+    int32_t mComponentColorFormat;  ///< SDK color format from component
+    sp<ABuffer> mWrapped;  ///< wrapped buffer (if we can map C2Buffer to an ABuffer)
+    uint32_t mAllocatedDepth;
+    uint32_t mBackBufferSize;
+    sp<ABuffer> mMediaImage;
+
+    sp<ABuffer> mBackBuffer;    ///< backing buffer if we have to copy C2Buffer <=> ABuffer
+
+    MediaImage2 *getMediaImage();
 };
 
 } // namespace android

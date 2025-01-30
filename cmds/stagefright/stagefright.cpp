@@ -60,6 +60,7 @@
 
 #include <private/media/VideoFrame.h>
 
+#include <com_android_graphics_libgui_flags.h>
 #include <gui/GLConsumer.h>
 #include <gui/Surface.h>
 #include <gui/SurfaceComposerClient.h>
@@ -1133,7 +1134,12 @@ int main(int argc, char **argv) {
             CHECK(gSurface != NULL);
         } else {
             CHECK(useSurfaceTexAlloc);
-
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+            sp<GLConsumer> texture =
+                    new GLConsumer(0 /* tex */, GLConsumer::TEXTURE_EXTERNAL,
+                                   true /* useFenceSync */, false /* isControlledByApp */);
+            gSurface = texture->getSurface();
+#else
             sp<IGraphicBufferProducer> producer;
             sp<IGraphicBufferConsumer> consumer;
             BufferQueue::createBufferQueue(&producer, &consumer);
@@ -1141,6 +1147,7 @@ int main(int argc, char **argv) {
                     GLConsumer::TEXTURE_EXTERNAL, true /* useFenceSync */,
                     false /* isControlledByApp */);
             gSurface = new Surface(producer);
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
         }
     }
 

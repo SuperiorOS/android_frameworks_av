@@ -31,6 +31,7 @@
 #include <C2Debug.h>
 #include <codec2/common/HalSelection.h>
 #include <codec2/hidl/client.h>
+#include <com_android_graphics_libgui_flags.h>
 #include <gui/BufferQueue.h>
 #include <gui/IConsumerListener.h>
 #include <gui/IProducerListener.h>
@@ -139,6 +140,20 @@ class Codec2VideoDecHidlTestBase : public ::testing::Test {
         mReorderDepth = -1;
         mTimestampDevTest = false;
         mMd5Offset = 0;
+        mIsTunneledCodec = false;
+
+        // For C2 codecs that support tunneling by default, the default value of
+        // C2PortTunneledModeTuning::mode should (!= NONE). Otherwise VTS
+        // can assume that the codec can support regular (non-tunneled decode)
+        queried.clear();
+        c2err = mComponent->query(
+                {}, {C2PortTunneledModeTuning::output::PARAM_TYPE}, C2_MAY_BLOCK, &queried);
+        if (c2err == C2_OK && !queried.empty() && queried.front() != nullptr) {
+            C2TunneledModeStruct::mode_t tunneledMode =
+                    ((C2PortTunneledModeTuning::output*)queried.front().get())->m.mode;
+            mIsTunneledCodec = (tunneledMode != C2TunneledModeStruct::NONE);
+        }
+
         mMd5Enable = false;
         mRefMd5 = nullptr;
 
@@ -308,6 +323,7 @@ class Codec2VideoDecHidlTestBase : public ::testing::Test {
 
     bool mEos;
     bool mDisableTest;
+    bool mIsTunneledCodec;
     bool mMd5Enable;
     bool mTimestampDevTest;
     uint64_t mTimestampUs;
@@ -408,7 +424,6 @@ void setOutputSurface(const std::shared_ptr<android::Codec2Client::Component>& c
                       surfaceMode_t surfMode) {
     using namespace android;
     sp<IGraphicBufferProducer> producer = nullptr;
-    sp<IGraphicBufferConsumer> consumer = nullptr;
     sp<GLConsumer> texture = nullptr;
     sp<ANativeWindow> surface = nullptr;
     static std::atomic_uint32_t surfaceGeneration{0};
@@ -427,6 +442,16 @@ void setOutputSurface(const std::shared_ptr<android::Codec2Client::Component>& c
     }
 
     if (surfMode == SURFACE) {
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+        texture = new GLConsumer(0 /* tex */, GLConsumer::TEXTURE_EXTERNAL, true /* useFenceSync */,
+                                 false /* isControlledByApp */);
+        sp<Surface> s = texture->getSurface();
+        surface = s;
+        ASSERT_NE(surface, nullptr) << "failed to create Surface object";
+
+        producer = s->getIGraphicBufferProducer();
+#else
+        sp<IGraphicBufferConsumer> consumer = nullptr;
         BufferQueue::createBufferQueue(&producer, &consumer);
         ASSERT_NE(producer, nullptr) << "createBufferQueue returned invalid producer";
         ASSERT_NE(consumer, nullptr) << "createBufferQueue returned invalid consumer";
@@ -437,6 +462,7 @@ void setOutputSurface(const std::shared_ptr<android::Codec2Client::Component>& c
 
         surface = new Surface(producer);
         ASSERT_NE(surface, nullptr) << "failed to create Surface object";
+#endif // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
 
         producer->setGenerationNumber(generation);
     }
@@ -612,11 +638,14 @@ TEST_P(Codec2VideoDecDecodeTest, DecodeTest) {
 
     bool signalEOS = std::get<3>(GetParam());
     surfaceMode_t surfMode = std::get<4>(GetParam());
-    mTimestampDevTest = true;
+    // Disable checking timestamp as tunneled codecs doesn't populate
+    // output buffers in C2Work.
+    mTimestampDevTest = !mIsTunneledCodec;
 
     android::Vector<FrameInfo> Info;
 
-    mMd5Enable = true;
+    // Disable md5 checks as tunneled codecs doesn't populate output buffers in C2Work
+    mMd5Enable = !mIsTunneledCodec;
     if (!mChksumFile.compare(sResourceDir)) mMd5Enable = false;
 
     uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
@@ -712,7 +741,9 @@ TEST_P(Codec2VideoDecHidlTest, AdaptiveDecodeTest) {
     typedef std::unique_lock<std::mutex> ULock;
     ASSERT_EQ(mComponent->start(), C2_OK);
 
-    mTimestampDevTest = true;
+    // Disable checking timestamp as tunneled codecs doesn't populate
+    // output buffers in C2Work.
+    mTimestampDevTest = !mIsTunneledCodec;
     uint32_t timestampOffset = 0;
     uint32_t offset = 0;
     android::Vector<FrameInfo> Info;

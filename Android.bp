@@ -160,11 +160,11 @@ aidl_interface {
             imports: ["android.hardware.audio.core-V2"],
         },
     ],
-    frozen: true,
+    frozen: false,
 
 }
 
-latest_av_audio_types_aidl = "av-audio-types-aidl-V1"
+latest_av_audio_types_aidl = "av-audio-types-aidl-V2"
 
 cc_defaults {
     name: "latest_av_audio_types_aidl_ndk_shared",

@@ -33,6 +33,7 @@
 #include <hardware/gralloc.h>
 
 #include <camera/CameraMetadata.h>
+#include <android/content/AttributionSourceState.h>
 #include <android/hardware/ICameraService.h>
 #include <android/hardware/ICameraServiceListener.h>
 #include <android/hardware/BnCameraServiceListener.h>
@@ -46,6 +47,7 @@
 #include <camera/CameraUtils.h>
 #include <camera/StringUtils.h>
 
+#include <com_android_graphics_libgui_flags.h>
 #include <gui/BufferItemConsumer.h>
 #include <gui/IGraphicBufferProducer.h>
 #include <gui/Surface.h>
@@ -347,7 +349,11 @@ TEST(CameraServiceBinderTest, CheckBinderCameraService) {
     binder::Status res;
 
     int32_t numCameras = 0;
-    res = service->getNumberOfCameras(hardware::ICameraService::CAMERA_TYPE_ALL, kDefaultDeviceId,
+    AttributionSourceState clientAttribution;
+    clientAttribution.deviceId = kDefaultDeviceId;
+    clientAttribution.uid = hardware::ICameraService::USE_CALLING_UID;
+    clientAttribution.packageName = "meeeeeeeee!";
+    res = service->getNumberOfCameras(hardware::ICameraService::CAMERA_TYPE_ALL, clientAttribution,
             /*devicePolicy*/0, &numCameras);
     EXPECT_TRUE(res.isOk()) << res;
     EXPECT_LE(0, numCameras);
@@ -360,7 +366,7 @@ TEST(CameraServiceBinderTest, CheckBinderCameraService) {
 
     EXPECT_EQ(numCameras, static_cast<const int>(statuses.size()));
     for (const auto &it : statuses) {
-        listener->onStatusChanged(it.status, it.cameraId, kDefaultDeviceId);
+        listener->onStatusChanged(it.status, it.cameraId, clientAttribution.deviceId);
     }
 
     for (int32_t i = 0; i < numCameras; i++) {
@@ -379,7 +385,7 @@ TEST(CameraServiceBinderTest, CheckBinderCameraService) {
         CameraMetadata metadata;
         res = service->getCameraCharacteristics(cameraId,
                 /*targetSdkVersion*/__ANDROID_API_FUTURE__, /*overrideToPortrait*/false,
-                kDefaultDeviceId, /*devicePolicy*/0, &metadata);
+                clientAttribution, /*devicePolicy*/0, &metadata);
         EXPECT_TRUE(res.isOk()) << res;
         EXPECT_FALSE(metadata.isEmpty());
 
@@ -393,10 +399,10 @@ TEST(CameraServiceBinderTest, CheckBinderCameraService) {
         // Check connect binder calls
         sp<TestCameraDeviceCallbacks> callbacks(new TestCameraDeviceCallbacks());
         sp<hardware::camera2::ICameraDeviceUser> device;
-        res = service->connectDevice(callbacks, cameraId, "meeeeeeeee!",
-                {}, hardware::ICameraService::USE_CALLING_UID, /*oomScoreOffset*/ 0,
+        res = service->connectDevice(callbacks, cameraId,
+                /*oomScoreOffset*/ 0,
                 /*targetSdkVersion*/__ANDROID_API_FUTURE__,
-                /*overrideToPortrait*/false, kDefaultDeviceId, /*devicePolicy*/0, /*out*/&device);
+                /*overrideToPortrait*/false, clientAttribution, /*devicePolicy*/0, /*out*/&device);
         EXPECT_TRUE(res.isOk()) << res;
         ASSERT_NE(nullptr, device.get());
         device->disconnect();
@@ -406,12 +412,12 @@ TEST(CameraServiceBinderTest, CheckBinderCameraService) {
         if (torchStatus == hardware::ICameraServiceListener::TORCH_STATUS_AVAILABLE_OFF) {
             // Check torch calls
             res = service->setTorchMode(cameraId,
-                    /*enabled*/true, callbacks, kDefaultDeviceId, /*devicePolicy*/0);
+                    /*enabled*/true, callbacks, clientAttribution, /*devicePolicy*/0);
             EXPECT_TRUE(res.isOk()) << res;
             EXPECT_TRUE(listener->waitForTorchState(
                     hardware::ICameraServiceListener::TORCH_STATUS_AVAILABLE_ON, i));
             res = service->setTorchMode(cameraId,
-                    /*enabled*/false, callbacks, kDefaultDeviceId, /*devicePolicy*/0);
+                    /*enabled*/false, callbacks, clientAttribution, /*devicePolicy*/0);
             EXPECT_TRUE(res.isOk()) << res;
             EXPECT_TRUE(listener->waitForTorchState(
                     hardware::ICameraServiceListener::TORCH_STATUS_AVAILABLE_OFF, i));
@@ -437,10 +443,14 @@ protected:
         sp<hardware::camera2::ICameraDeviceUser> device;
         {
             SCOPED_TRACE("openNewDevice");
-            binder::Status res = service->connectDevice(callbacks, deviceId, "meeeeeeeee!",
-                    {}, hardware::ICameraService::USE_CALLING_UID, /*oomScoreOffset*/ 0,
+            AttributionSourceState clientAttribution;
+            clientAttribution.deviceId = kDefaultDeviceId;
+            clientAttribution.uid = hardware::ICameraService::USE_CALLING_UID;
+            clientAttribution.packageName = "meeeeeeeee!";
+            binder::Status res = service->connectDevice(callbacks, deviceId,
+                    /*oomScoreOffset*/ 0,
                     /*targetSdkVersion*/__ANDROID_API_FUTURE__,
-                    /*overrideToPortrait*/false, kDefaultDeviceId, /*devicePolicy*/0,
+                    /*overrideToPortrait*/false, clientAttribution, /*devicePolicy*/0,
                     /*out*/&device);
             EXPECT_TRUE(res.isOk()) << res;
         }
@@ -473,11 +483,13 @@ protected:
         serviceListener = new TestCameraServiceListener();
         std::vector<hardware::CameraStatus> statuses;
         service->addListener(serviceListener, &statuses);
+        AttributionSourceState clientAttribution;
+        clientAttribution.deviceId = kDefaultDeviceId;
         for (const auto &it : statuses) {
-            serviceListener->onStatusChanged(it.status, it.cameraId, kDefaultDeviceId);
+            serviceListener->onStatusChanged(it.status, it.cameraId, clientAttribution.deviceId);
         }
         service->getNumberOfCameras(hardware::ICameraService::CAMERA_TYPE_BACKWARD_COMPATIBLE,
-                kDefaultDeviceId, /*devicePolicy*/0, &numCameras);
+                clientAttribution, /*devicePolicy*/0, &numCameras);
     }
 
     virtual void TearDown() {
@@ -507,6 +519,23 @@ TEST_F(CameraClientBinderTest, CheckBinderCameraDeviceUser) {
 
         // Setup a buffer queue; I'm just using the vendor opaque format here as that is
         // guaranteed to be present
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+        sp<BufferItemConsumer> opaqueConsumer = new BufferItemConsumer(
+                GRALLOC_USAGE_SW_READ_NEVER, /*maxImages*/ 2, /*controlledByApp*/ true);
+        EXPECT_TRUE(opaqueConsumer.get() != nullptr);
+        opaqueConsumer->setName(String8("nom nom nom"));
+
+        // Set to VGA dimens for default, as that is guaranteed to be present
+        EXPECT_EQ(OK, opaqueConsumer->setDefaultBufferSize(640, 480));
+        EXPECT_EQ(OK,
+                  opaqueConsumer->setDefaultBufferFormat(HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED));
+
+        sp<Surface> surface = opaqueConsumer->getSurface();
+
+        sp<IGraphicBufferProducer> producer = surface->getIGraphicBufferProducer();
+        std::string noPhysicalId;
+        OutputConfiguration output(producer, /*rotation*/ 0, noPhysicalId);
+#else
         sp<IGraphicBufferProducer> gbProducer;
         sp<IGraphicBufferConsumer> gbConsumer;
         BufferQueue::createBufferQueue(&gbProducer, &gbConsumer);
@@ -523,6 +552,7 @@ TEST_F(CameraClientBinderTest, CheckBinderCameraDeviceUser) {
 
         std::string noPhysicalId;
         OutputConfiguration output(gbProducer, /*rotation*/0, noPhysicalId);
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
 
         // Can we configure?
         res = device->beginConfigure();

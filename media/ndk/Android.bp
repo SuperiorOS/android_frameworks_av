@@ -52,9 +52,6 @@ ndk_library {
     symbol_file: "libmediandk.map.txt",
     first_version: "21",
     unversioned_until: "current",
-    export_header_libs: [
-        "libmediandk_headers",
-    ],
 }
 
 ndk_headers {

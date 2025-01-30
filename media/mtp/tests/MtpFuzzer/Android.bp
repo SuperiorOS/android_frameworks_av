@@ -29,7 +29,6 @@ cc_defaults {
         "liblog",
         "libutils",
     ],
-    static_libs: ["libc++fs",],
     cflags: [
         "-Wall",
         "-Wextra",

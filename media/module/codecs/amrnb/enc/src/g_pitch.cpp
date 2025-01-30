@@ -376,15 +376,11 @@ Word16 G_pitch(         /* o : Gain of pitch lag saturated to 1.2       */
     {
         L_temp = ((Word32) * (p_xn++) * *(p_y1++));
         s1 = s;
-        s = s1 + L_temp;
 
-        if ((s1 ^ L_temp) > 0)
+        if (__builtin_add_overflow(s1, L_temp, &s))
         {
-            if ((s1 ^ s) < 0)
-            {
-                *pOverflow = 1;
-                break;
-            }
+            *pOverflow = 1;
+            break;
         }
     }
 

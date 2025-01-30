@@ -38,6 +38,7 @@
 #include <media/audiohal/DevicesFactoryHalInterface.h>
 #include <mediautils/ServiceUtilities.h>
 #include <mediautils/Synchronization.h>
+#include <psh_utils/AudioPowerManager.h>
 
 // not needed with the includes above, added to prevent transitive include dependency.
 #include <utils/KeyedVector.h>
@@ -96,9 +97,8 @@ private:
     status_t setStreamMute(audio_stream_type_t stream, bool muted) final
             EXCLUDES_AudioFlinger_Mutex;
 
-    float streamVolume(audio_stream_type_t stream,
-            audio_io_handle_t output) const final EXCLUDES_AudioFlinger_Mutex;
-    bool streamMute(audio_stream_type_t stream) const final EXCLUDES_AudioFlinger_Mutex;
+    status_t setPortsVolume(const std::vector<audio_port_handle_t>& portIds, float volume,
+            audio_io_handle_t output) final EXCLUDES_AudioFlinger_Mutex;
 
     status_t setMode(audio_mode_t mode) final EXCLUDES_AudioFlinger_Mutex;
 
@@ -337,9 +337,12 @@ private:
             audio_config_base_t* mixerConfig,
             audio_devices_t deviceType,
             const String8& address,
-            audio_output_flags_t flags) final REQUIRES(mutex());
+            audio_output_flags_t flags,
+            audio_attributes_t attributes) final REQUIRES(mutex());
     const DefaultKeyedVector<audio_module_handle_t, AudioHwDevice*>&
-            getAudioHwDevs_l() const final REQUIRES(mutex()) { return mAudioHwDevs; }
+            getAudioHwDevs_l() const final REQUIRES(mutex(), hardwareMutex()) {
+              return mAudioHwDevs;
+            }
     void updateDownStreamPatches_l(const struct audio_patch* patch,
             const std::set<audio_io_handle_t>& streams) final REQUIRES(mutex());
     void updateOutDevicesForRecordThreads_l(const DeviceDescriptorBaseVector& devices) final
@@ -406,6 +409,8 @@ private:
             EXCLUDES_AudioFlinger_ClientMutex;
     void onHardError(std::set<audio_port_handle_t>& trackPortIds) final
             EXCLUDES_AudioFlinger_ClientMutex;
+
+    const ::com::android::media::permission::IPermissionProvider& getPermissionProvider() final;
 
     // ---- end of IAfThreadCallback interface
 
@@ -495,6 +500,7 @@ private:
         const pid_t             mPid;
         const uid_t             mUid;
         const sp<media::IAudioFlingerClient> mAudioFlingerClient;
+        const std::unique_ptr<media::psh_utils::Token> mClientToken;
     };
 
     // --- MediaLogNotifier ---
@@ -551,6 +557,7 @@ private:
     IAfPlaybackThread* checkMixerThread_l(audio_io_handle_t output) const REQUIRES(mutex());
 
     sp<VolumeInterface> getVolumeInterface_l(audio_io_handle_t output) const REQUIRES(mutex());
+
     std::vector<sp<VolumeInterface>> getAllVolumeInterfaces_l() const REQUIRES(mutex());
 
 
@@ -693,8 +700,7 @@ private:
 
     DefaultKeyedVector<audio_io_handle_t, sp<IAfRecordThread>> mRecordThreads GUARDED_BY(mutex());
 
-    DefaultKeyedVector<pid_t, sp<NotificationClient>> mNotificationClients
-            GUARDED_BY(clientMutex());
+    std::map<pid_t, sp<NotificationClient>> mNotificationClients GUARDED_BY(clientMutex());
 
                 // updated by atomic_fetch_add_explicit
     volatile atomic_uint_fast32_t mNextUniqueIds[AUDIO_UNIQUE_ID_USE_MAX];  // ctor init
@@ -771,8 +777,6 @@ private:
 
     bool mSystemReady GUARDED_BY(mutex()) = false;
     std::atomic<bool> mAudioPolicyReady = false;
-
-    mediautils::UidInfo mUidInfo GUARDED_BY(mutex());
 
     // no mutex needed.
     SimpleLog  mRejectedSetParameterLog;

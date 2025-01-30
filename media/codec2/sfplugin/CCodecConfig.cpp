@@ -1890,22 +1890,32 @@ ReflectedParamUpdater::Dict CCodecConfig::getReflectedFormat(
         if (mDomain == (IS_VIDEO | IS_ENCODER)) {
             AString qpOffsetRects;
             if (params->findString(PARAMETER_KEY_QP_OFFSET_RECTS, &qpOffsetRects)) {
+                int width, height;
+                mInputFormat->findInt32("width", &width);
+                mInputFormat->findInt32("height", &height);
                 std::vector<C2QpOffsetRectStruct> c2QpOffsetRects;
                 char mutableStrQpOffsetRects[strlen(qpOffsetRects.c_str()) + 1];
                 strcpy(mutableStrQpOffsetRects, qpOffsetRects.c_str());
-                char* box = strtok(mutableStrQpOffsetRects, ";");
+                char* savePtr;
+                char* box = strtok_r(mutableStrQpOffsetRects, ";", &savePtr);
                 while (box != nullptr) {
                     int top, left, bottom, right, offset;
                     if (sscanf(box, "%d,%d-%d,%d=%d", &top, &left, &bottom, &right, &offset) == 5) {
                         left = c2_max(0, left);
                         top = c2_max(0, top);
+                        right = c2_min(right, width);
+                        bottom = c2_min(bottom, height);
                         if (right > left && bottom > top) {
                             C2Rect rect(right - left, bottom - top);
                             rect.at(left, top);
                             c2QpOffsetRects.push_back(C2QpOffsetRectStruct(rect, offset));
+                        } else {
+                            ALOGE("Rects configuration %s is not valid.", box);
                         }
+                    } else {
+                        ALOGE("Rects configuration %s doesn't follow the string pattern.", box);
                     }
-                    box = strtok(nullptr, ";");
+                    box = strtok_r(nullptr, ";", &savePtr);
                 }
                 if (c2QpOffsetRects.size() != 0) {
                     const std::unique_ptr<C2StreamQpOffsetRects::output> regions =

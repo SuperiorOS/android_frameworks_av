@@ -244,27 +244,6 @@ ndk::ScopedAStatus DynamicsProcessingImpl::getDescriptor(Descriptor* _aidl_retur
     return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus DynamicsProcessingImpl::commandImpl(CommandId command) {
-    RETURN_IF(!mContext, EX_NULL_POINTER, "nullContext");
-    switch (command) {
-        case CommandId::START:
-            mContext->enable();
-            return ndk::ScopedAStatus::ok();
-        case CommandId::STOP:
-            mContext->disable();
-            return ndk::ScopedAStatus::ok();
-        case CommandId::RESET:
-            mContext->disable();
-            mContext->resetBuffer();
-            return ndk::ScopedAStatus::ok();
-        default:
-            // Need this default handling for vendor extendable CommandId::VENDOR_COMMAND_*
-            LOG(ERROR) << __func__ << " commandId " << toString(command) << " not supported";
-            return ndk::ScopedAStatus::fromExceptionCodeWithMessage(EX_ILLEGAL_ARGUMENT,
-                                                                    "commandIdNotSupported");
-    }
-}
-
 bool DynamicsProcessingImpl::isParamInRange(const Parameter::Specific& specific) {
     auto& dp = specific.get<Parameter::Specific::dynamicsProcessing>();
     return DynamicsProcessingRanges::isParamInRange(dp, kRanges);

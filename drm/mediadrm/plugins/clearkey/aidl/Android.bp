@@ -11,13 +11,13 @@ cc_defaults {
     name: "aidl_clearkey_service_defaults-use-shared-deps",
 
     shared_libs: [
+        "android.hardware.drm-V1-ndk",
         "libbase",
         "libbinder_ndk",
         "libcrypto",
         "liblog",
         "libprotobuf-cpp-lite",
         "libutils",
-        "android.hardware.drm-V1-ndk",
     ],
 
     static_libs: [
@@ -40,6 +40,7 @@ cc_defaults {
 
     static_libs: [
         "android.hardware.common-V2-ndk",
+        "android.hardware.drm.common-V1-ndk",
         "android.hardware.drm-V1-ndk",
         "libbase",
         "libclearkeybase",
@@ -62,7 +63,11 @@ cc_defaults {
 
     relative_install_path: "hw",
 
-    cflags: ["-Wall", "-Werror", "-Wthread-safety"],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wthread-safety",
+    ],
 
     include_dirs: ["frameworks/av/include"],
 
@@ -81,7 +86,7 @@ cc_binary {
     ],
     srcs: ["Service.cpp"],
     init_rc: ["android.hardware.drm-service.clearkey.rc"],
-    vintf_fragments: ["android.hardware.drm-service.clearkey.xml"],
+    vintf_fragment_modules: ["android.hardware.drm-service.clearkey.xml_vintf"],
 }
 
 cc_binary {
@@ -93,7 +98,13 @@ cc_binary {
     overrides: ["android.hardware.drm-service.clearkey"],
     srcs: ["ServiceLazy.cpp"],
     init_rc: ["android.hardware.drm-service-lazy.clearkey.rc"],
-    vintf_fragments: ["android.hardware.drm-service.clearkey.xml"],
+    vintf_fragment_modules: ["android.hardware.drm-service.clearkey.xml_vintf"],
+}
+
+vintf_fragment {
+    name: "android.hardware.drm-service.clearkey.xml_vintf",
+    src: "android.hardware.drm-service.clearkey.xml",
+    vendor: true,
 }
 
 cc_binary {
@@ -137,18 +148,22 @@ cc_defaults {
 
     relative_install_path: "hw",
 
-    cflags: ["-Wall", "-Werror", "-Wthread-safety"],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wthread-safety",
+    ],
 
     include_dirs: ["frameworks/av/include"],
 
     shared_libs: [
+        "android.hardware.drm-V1-ndk",
         "libbase",
         "libbinder_ndk",
         "libcrypto",
         "liblog",
         "libprotobuf-cpp-lite",
         "libutils",
-        "android.hardware.drm-V1-ndk",
     ],
 
     static_libs: [
@@ -192,7 +207,7 @@ apex {
     ],
     prebuilts: [
         "android.hardware.drm-service.clearkey.apex.rc",
-        "android.hardware.drm-service.clearkey.xml"
+        "android.hardware.drm-service.clearkey.xml",
     ],
     overrides: [
         "android.hardware.drm-service.clearkey",
@@ -233,11 +248,11 @@ apex {
     ],
     prebuilts: [
         "android.hardware.drm-service-lazy.clearkey.apex.rc",
-        "android.hardware.drm-service.clearkey.xml"
+        "android.hardware.drm-service.clearkey.xml",
     ],
     overrides: [
-        "android.hardware.drm-service.clearkey",
         "android.hardware.drm-service-lazy.clearkey",
+        "android.hardware.drm-service.clearkey",
         "com.android.hardware.drm.clearkey",
     ],
 }

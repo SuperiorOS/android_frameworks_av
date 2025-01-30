@@ -75,7 +75,7 @@ def generateXmlStructureFile(strategies, strategy_structure_in_file, output_file
     strategy_components = strategies_root.find('ComponentType')
 
     for strategy_name in strategies:
-        context_mapping = "".join(map(str, ["Name:", strategy_name]))
+        context_mapping = "".join(map(str, ["Identifier:-1,Name:", strategy_name]))
         strategy_pfw_name = strategy_name.replace('STRATEGY_', '').lower()
         ET.SubElement(strategy_components, "Component",
                       Name=strategy_pfw_name, Type="ProductStrategy",

@@ -27,6 +27,12 @@
 #include <media/stagefright/foundation/ADebug.h>
 #include <media/stagefright/foundation/AMessage.h>
 
+#define ATRACE_TAG ATRACE_TAG_AUDIO
+#include <utils/Trace.h>
+
+#include <android-base/stringprintf.h>
+using ::android::base::StringPrintf;
+
 namespace android {
 
 NuPlayer::DecoderBase::DecoderBase(const sp<AMessage> &notify)
@@ -129,9 +135,11 @@ void NuPlayer::DecoderBase::onMessageReceived(const sp<AMessage> &msg) {
     switch (msg->what()) {
         case kWhatConfigure:
         {
+            ATRACE_BEGIN("NuPlayer::DecoderBase::onConfigure");
             sp<AMessage> format;
             CHECK(msg->findMessage("format", &format));
             onConfigure(format);
+            ATRACE_END();
             break;
         }
 

@@ -17,6 +17,7 @@
 #include <map>
 #include <set>
 
+#include <media/TypeConverter.h>
 #include <system/audio.h>
 #include <utils/Log.h>
 #include <utils/String8.h>
@@ -37,17 +38,25 @@ public:
 
     status_t openOutput(audio_module_handle_t module,
                         audio_io_handle_t *output,
-                        audio_config_t * /*halConfig*/,
-                        audio_config_base_t * /*mixerConfig*/,
+                        audio_config_t *halConfig,
+                        audio_config_base_t *mixerConfig,
                         const sp<DeviceDescriptorBase>& /*device*/,
                         uint32_t * /*latencyMs*/,
-                        audio_output_flags_t /*flags*/) override {
+                        audio_output_flags_t flags,
+                        audio_attributes_t /*attributes*/) override {
         if (module >= mNextModuleHandle) {
             ALOGE("%s: Module handle %d has not been allocated yet (next is %d)",
                   __func__, module, mNextModuleHandle);
             return BAD_VALUE;
         }
         *output = mNextIoHandle++;
+        mOpenedOutputs[*output] = flags;
+        ALOGD("%s: opened output %d: HAL(%s %s %d) Mixer(%s %s %d) %s", __func__, *output,
+              audio_channel_out_mask_to_string(halConfig->channel_mask),
+              audio_format_to_string(halConfig->format), halConfig->sample_rate,
+              audio_channel_out_mask_to_string(mixerConfig->channel_mask),
+              audio_format_to_string(mixerConfig->format), mixerConfig->sample_rate,
+              android::toString(flags).c_str());
         return NO_ERROR;
     }
 
@@ -55,6 +64,16 @@ public:
                                           audio_io_handle_t /*output2*/) override {
         audio_io_handle_t id = mNextIoHandle++;
         return id;
+    }
+
+    status_t closeOutput(audio_io_handle_t output) override {
+        if (auto iter = mOpenedOutputs.find(output); iter != mOpenedOutputs.end()) {
+            mOpenedOutputs.erase(iter);
+            return NO_ERROR;
+        } else {
+            ALOGE("%s: Unknown output %d", __func__, output);
+            return BAD_VALUE;
+        }
     }
 
     status_t openInput(audio_module_handle_t module,
@@ -72,6 +91,7 @@ public:
         *input = mNextIoHandle++;
         mOpenedInputs.insert(*input);
         ALOGD("%s: opened input %d", __func__, *input);
+        mOpenInputCallsCount++;
         return NO_ERROR;
     }
 
@@ -86,6 +106,7 @@ public:
             return BAD_VALUE;
         }
         ALOGD("%s: closed input %d", __func__, input);
+        mCloseInputCallsCount++;
         return NO_ERROR;
     }
 
@@ -260,6 +281,25 @@ public:
         auto it = mTracksInternalMute.find(portId);
         return it == mTracksInternalMute.end() ? false : it->second;
     }
+    void resetInputApiCallsCounters() {
+        mOpenInputCallsCount = 0;
+        mCloseInputCallsCount = 0;
+    }
+
+    size_t getCloseInputCallsCount() const {
+        return mCloseInputCallsCount;
+    }
+
+    size_t getOpenInputCallsCount() const {
+        return mOpenInputCallsCount;
+    }
+
+    std::optional<audio_output_flags_t> getOpenOutputFlags(audio_io_handle_t output) const {
+        if (auto iter = mOpenedOutputs.find(output); iter != mOpenedOutputs.end()) {
+            return iter->second;
+        }
+        return std::nullopt;
+    }
 
 private:
     audio_module_handle_t mNextModuleHandle = AUDIO_MODULE_HANDLE_NONE + 1;
@@ -275,6 +315,9 @@ private:
     std::set<audio_channel_mask_t> mSupportedChannelMasks;
     std::map<audio_port_handle_t, bool> mTracksInternalMute;
     std::set<audio_io_handle_t> mOpenedInputs;
+    size_t mOpenInputCallsCount = 0;
+    size_t mCloseInputCallsCount = 0;
+    std::map<audio_io_handle_t, audio_output_flags_t> mOpenedOutputs;
 };
 
 } // namespace android

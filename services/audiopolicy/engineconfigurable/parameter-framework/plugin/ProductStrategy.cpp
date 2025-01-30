@@ -18,10 +18,7 @@
 #include "PolicyMappingKeys.h"
 #include "PolicySubsystem.h"
 
-using std::string;
-using android::product_strategy_t;
-
-ProductStrategy::ProductStrategy(const string &mappingValue,
+ProductStrategy::ProductStrategy(const std::string &mappingValue,
                    CInstanceConfigurableElement *instanceConfigurableElement,
                    const CMappingContext &context,
                    core::log::Logger& logger)
@@ -30,26 +27,32 @@ ProductStrategy::ProductStrategy(const string &mappingValue,
                                 mappingValue,
                                 MappingKeyAmend1,
                                 (MappingKeyAmendEnd - MappingKeyAmend1 + 1),
-                                context)
-{
-    std::string name(context.getItem(MappingKeyName));
+                                context) {
+
+    size_t id = context.getItemAsInteger(MappingKeyIdentifier);
+    std::string nameFromStructure(context.getItem(MappingKeyName));
 
     ALOG_ASSERT(instanceConfigurableElement != nullptr, "Invalid Configurable Element");
     mPolicySubsystem = static_cast<const PolicySubsystem *>(
-                instanceConfigurableElement->getBelongingSubsystem());
+            instanceConfigurableElement->getBelongingSubsystem());
     ALOG_ASSERT(mPolicySubsystem != nullptr, "Invalid Policy Subsystem");
 
     mPolicyPluginInterface = mPolicySubsystem->getPolicyPluginInterface();
     ALOG_ASSERT(mPolicyPluginInterface != nullptr, "Invalid Policy Plugin Interface");
 
-    mId = mPolicyPluginInterface->getProductStrategyByName(name);
+    mId = static_cast<android::product_strategy_t>(id);
+    std::string name = mPolicyPluginInterface->getProductStrategyName(mId);
+    if (name.empty()) {
+        name = nameFromStructure;
+        mId = mPolicyPluginInterface->getProductStrategyByName(name);
+    }
 
     ALOG_ASSERT(mId != PRODUCT_STRATEGY_INVALID, "Product Strategy %s not found", name.c_str());
 
     ALOGE("Product Strategy %s added", name.c_str());
 }
 
-bool ProductStrategy::sendToHW(string & /*error*/)
+bool ProductStrategy::sendToHW(std::string & /*error*/)
 {
     Device deviceParams;
     blackboardRead(&deviceParams, sizeof(deviceParams));

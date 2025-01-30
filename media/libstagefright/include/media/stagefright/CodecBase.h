@@ -517,6 +517,15 @@ public:
     };
 
     /**
+     * Notify a buffer is attached to output surface.
+     *
+     * @param     generation    MediaCodec's surface specifier
+     */
+    virtual void onBufferAttachedToOutputSurface(uint32_t /*generation*/) {
+        // default: no-op
+    };
+
+    /**
      * Discard a buffer to the underlying CodecBase object.
      *
      * TODO: remove once this operation can be handled by just clearing the

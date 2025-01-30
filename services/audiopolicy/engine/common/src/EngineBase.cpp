@@ -116,6 +116,15 @@ product_strategy_t EngineBase::getProductStrategyByName(const std::string &name)
     return PRODUCT_STRATEGY_NONE;
 }
 
+std::string EngineBase::getProductStrategyName(product_strategy_t id) const {
+    for (const auto &iter : mProductStrategies) {
+        if (iter.second->getId() == id) {
+            return iter.second->getName();
+        }
+    }
+    return "";
+}
+
 engineConfig::ParsingResult EngineBase::loadAudioPolicyEngineConfig(
         const media::audio::common::AudioHalEngineConfig& aidlConfig)
 {
@@ -240,7 +249,7 @@ engineConfig::ParsingResult EngineBase::processParsingResult(
         loadVolumeConfig(mVolumeGroups, volumeConfig);
     }
     for (auto& strategyConfig : result.parsedConfig->productStrategies) {
-        sp<ProductStrategy> strategy = new ProductStrategy(strategyConfig.name);
+        sp<ProductStrategy> strategy = new ProductStrategy(strategyConfig.name, strategyConfig.id);
         for (const auto &group : strategyConfig.attributesGroups) {
             const auto &iter = std::find_if(begin(mVolumeGroups), end(mVolumeGroups),
                                          [&group](const auto &volumeGroup) {

@@ -68,7 +68,7 @@ public:
      * by the consumer end point, the BufferQueueProducer callback onBufferReleased will call
      * returnBufferForStream() to return the free buffer to this buffer manager. If the stream
      * uses buffer manager to manage the stream buffers, it should disable the BufferQueue
-     * allocation via IGraphicBufferProducer::allowAllocation(false).
+     * allocation via Surface::allowAllocation(false).
      *
      * Registering an already registered stream has no effect.
      *

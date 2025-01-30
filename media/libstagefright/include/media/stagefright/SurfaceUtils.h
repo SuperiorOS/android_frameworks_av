@@ -27,7 +27,7 @@ class Surface;
 namespace android {
 
 struct HDRStaticInfo;
-class IProducerListener;
+class SurfaceListener;
 
 /**
  * Configures |nativeWindow| for given |width|x|height|, pixel |format|, |rotation| and |usage|.
@@ -45,7 +45,7 @@ status_t pushBlankBuffersToNativeWindow(ANativeWindow *nativeWindow /* nonnull *
 status_t nativeWindowConnect(ANativeWindow *surface, const char *reason);
 status_t nativeWindowDisconnect(ANativeWindow *surface, const char *reason);
 status_t surfaceConnectWithListener(const sp<Surface> &surface,
-        sp<IProducerListener> listener, const char *reason);
+        sp<SurfaceListener> listener, const char *reason);
 
 /**
  * Disable buffer dropping behavior of BufferQueue if target sdk of application

@@ -261,6 +261,11 @@ aaudio_result_t AudioStreamLegacy::getBestTimestamp(clockid_t clockId,
 
 void AudioStreamLegacy::onAudioDeviceUpdate(audio_io_handle_t /* audioIo */,
             audio_port_handle_t deviceId) {
+    // Check for an invalid deviceId. Why change to UNSPECIFIED?
+    if (deviceId == AAUDIO_UNSPECIFIED) {
+        ALOGE("%s(, deviceId = AAUDIO_UNSPECIFIED)! Why?", __func__);
+        return;
+    }
     // Device routing is a common source of errors and DISCONNECTS.
     // Please leave this log in place. If there is a bug then this might
     // get called after the stream has been deleted so log before we

@@ -24,9 +24,11 @@ class AudioPolicyTestManager : public AudioPolicyManager {
     explicit AudioPolicyTestManager(AudioPolicyClientInterface *clientInterface)
             : AudioPolicyTestManager(AudioPolicyConfig::createDefault(), clientInterface) {}
     AudioPolicyTestManager(const sp<const AudioPolicyConfig>& config,
-            AudioPolicyClientInterface *clientInterface)
+            AudioPolicyClientInterface *clientInterface,
+            std::string engineConfig = "")
             : AudioPolicyManager(config,
-                    loadApmEngineLibraryAndCreateEngine(config->getEngineLibraryNameSuffix()),
+                    loadApmEngineLibraryAndCreateEngine(config->getEngineLibraryNameSuffix(),
+                                                        engineConfig),
                     clientInterface) {}
     using AudioPolicyManager::getConfig;
     using AudioPolicyManager::initialize;

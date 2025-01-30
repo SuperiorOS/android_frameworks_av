@@ -72,9 +72,6 @@ ConversionResult<F> getParameterSpecificField(const P& u) {
                 MAKE_EXTENSION_PARAMETER_ID(_effect, _tag##Tag, _extId);                          \
         aidl::android::hardware::audio::effect::Parameter _aidlParam;                             \
         RETURN_STATUS_IF_ERROR(statusTFromBinderStatus(mEffect->getParameter(_id, &_aidlParam))); \
-        aidl::android::hardware::audio::effect::VendorExtension _ext =                            \
-                VALUE_OR_RETURN_STATUS(GET_PARAMETER_SPECIFIC_FIELD(                              \
-                        _aidlParam, _effect, _tag, _effect::vendor, VendorExtension));            \
         return VALUE_OR_RETURN_STATUS(                                                            \
                 aidl::android::aidl2legacy_Parameter_EffectParameterWriter(_aidlParam, _param));  \
     }

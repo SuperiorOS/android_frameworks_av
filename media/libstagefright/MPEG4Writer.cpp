@@ -53,6 +53,8 @@
 #include <media/esds/ESDS.h>
 #include "include/HevcUtils.h"
 
+#include <com_android_media_editing_flags.h>
+
 #ifndef __predict_false
 #define __predict_false(exp) __builtin_expect((exp) != 0, 0)
 #endif
@@ -72,6 +74,9 @@ static const int64_t kInitialDelayTimeUs     = 700000LL;
 static const int64_t kMaxMetadataSize = 0x4000000LL;   // 64MB max per-frame metadata size
 static const int64_t kMaxCttsOffsetTimeUs = 30 * 60 * 1000000LL;  // 30 minutes
 static const size_t kESDSScratchBufferSize = 10;  // kMaxAtomSize in Mpeg4Extractor 64MB
+// Allow up to 100 milli second, which is safely above the maximum delay observed in manual testing
+// between posting from setNextFd and handling it
+static const int64_t kFdCondWaitTimeoutNs = 100000000;
 
 static const char kMetaKey_Version[]    = "com.android.version";
 static const char kMetaKey_Manufacturer[]      = "com.android.manufacturer";
@@ -1262,9 +1267,13 @@ status_t MPEG4Writer::switchFd() {
         return OK;
     }
 
+    // Wait for the signal only if the new file is not available.
     if (mNextFd == -1) {
-        ALOGW("No FileDescriptor for next recording");
-        return INVALID_OPERATION;
+        status_t res = mFdCond.waitRelative(mLock, kFdCondWaitTimeoutNs);
+        if (res != OK) {
+            ALOGW("No FileDescriptor for next recording");
+            return INVALID_OPERATION;
+        }
     }
 
     mSwitchPending = true;
@@ -2433,6 +2442,7 @@ status_t MPEG4Writer::setNextFd(int fd) {
         return INVALID_OPERATION;
     }
     mNextFd = dup(fd);
+    mFdCond.signal();
     return OK;
 }
 
@@ -3768,6 +3778,12 @@ status_t MPEG4Writer::Track::threadEntry() {
             if (mStszTableEntries->count() == 0) {
                 mFirstSampleTimeRealUs = systemTime() / 1000;
                 if (timestampUs < 0 && mFirstSampleStartOffsetUs == 0) {
+                    if (WARN_UNLESS(timestampUs != INT64_MIN, "for %s track", trackName)) {
+                        copy->release();
+                        mSource->stop();
+                        mIsMalformed = true;
+                        break;
+                    }
                     mFirstSampleStartOffsetUs = -timestampUs;
                     timestampUs = 0;
                 }
@@ -4886,8 +4902,15 @@ void MPEG4Writer::Track::writeEdtsBox() {
             int32_t mediaTime = (mFirstSampleStartOffsetUs * mTimeScale + 5E5) / 1E6;
             int32_t firstSampleOffsetTicks =
                     (mFirstSampleStartOffsetUs * mvhdTimeScale + 5E5) / 1E6;
-            // samples before 0 don't count in for duration, hence subtract firstSampleOffsetTicks.
-            addOneElstTableEntry(tkhdDurationTicks - firstSampleOffsetTicks, mediaTime, 1, 0);
+            if (tkhdDurationTicks >= firstSampleOffsetTicks) {
+                // samples before 0 don't count in for duration, hence subtract
+                // firstSampleOffsetTicks.
+                addOneElstTableEntry(tkhdDurationTicks - firstSampleOffsetTicks, mediaTime, 1, 0);
+            } else {
+                ALOGW("The track header duration %" PRId64
+                      " is smaller than the first sample offset %" PRId64,
+                      mTrackDurationUs, mFirstSampleStartOffsetUs);
+            }
         } else {
             // Track starting at zero.
             ALOGV("No edit list entry required for this track");
@@ -4923,6 +4946,8 @@ void MPEG4Writer::Track::writeEdtsBox() {
             // Track with start offset.
             ALOGV("Tracks starting > 0");
             int32_t editDurationTicks = 0;
+            int32_t trackStartOffsetBFramesUs = getMinCttsOffsetTimeUs() - kMaxCttsOffsetTimeUs;
+            ALOGV("trackStartOffsetBFramesUs:%" PRId32, trackStartOffsetBFramesUs);
             if (mMinCttsOffsetTicks == mMaxCttsOffsetTicks) {
                 // Video with no B frame or non-video track.
                 editDurationTicks =
@@ -4931,8 +4956,6 @@ void MPEG4Writer::Track::writeEdtsBox() {
                 ALOGV("editDuration:%" PRId64 "us", (trackStartOffsetUs + movieStartOffsetBFramesUs));
             } else {
                 // Track with B frame.
-                int32_t trackStartOffsetBFramesUs = getMinCttsOffsetTimeUs() - kMaxCttsOffsetTimeUs;
-                ALOGV("trackStartOffsetBFramesUs:%" PRId32, trackStartOffsetBFramesUs);
                 editDurationTicks =
                         ((trackStartOffsetUs + movieStartOffsetBFramesUs +
                           trackStartOffsetBFramesUs) * mvhdTimeScale + 5E5) / 1E6;
@@ -4946,7 +4969,15 @@ void MPEG4Writer::Track::writeEdtsBox() {
             } else if (editDurationTicks < 0) {
                 // Only video tracks with B Frames would hit this case.
                 ALOGV("Edit list entry to negate start offset by B frames in other tracks");
-                addOneElstTableEntry(tkhdDurationTicks, std::abs(editDurationTicks), 1, 0);
+                if (com::android::media::editing::flags::
+                        stagefrightrecorder_enable_b_frames()) {
+                    int32_t mediaTimeTicks =
+                            ((trackStartOffsetUs + movieStartOffsetBFramesUs +
+                              trackStartOffsetBFramesUs) * mTimeScale - 5E5) / 1E6;
+                    addOneElstTableEntry(tkhdDurationTicks, std::abs(mediaTimeTicks), 1, 0);
+                } else {
+                    addOneElstTableEntry(tkhdDurationTicks, std::abs(editDurationTicks), 1, 0);
+                }
             } else {
                 ALOGV("No edit list entry needed for this track");
             }

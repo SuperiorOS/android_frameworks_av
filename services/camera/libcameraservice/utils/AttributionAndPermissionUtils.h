@@ -41,11 +41,28 @@ class AttributionAndPermissionUtils {
         mCameraService = cameraService;
     }
 
+    static AttributionSourceState buildAttributionSource(int callingPid, int callingUid) {
+        AttributionSourceState attributionSource{};
+        attributionSource.pid = callingPid;
+        attributionSource.uid = callingUid;
+        return attributionSource;
+    }
+
+    static AttributionSourceState buildAttributionSource(int callingPid, int callingUid,
+            int32_t deviceId) {
+        AttributionSourceState attributionSource = buildAttributionSource(callingPid, callingUid);
+        attributionSource.deviceId = deviceId;
+        return attributionSource;
+    }
+
     // Utilities handling Binder calling identities (previously in CameraThreadState)
     virtual int getCallingUid();
     virtual int getCallingPid();
     virtual int64_t clearCallingIdentity();
     virtual void restoreCallingIdentity(int64_t token);
+
+    virtual bool resolveClientUid(/*inout*/ int& clientUid);
+    virtual bool resolveClientPid(/*inout*/ int& clientPid);
 
     /**
      * Pre-grants the permission if the attribution source uid is for an automotive
@@ -123,17 +140,13 @@ public:
             : mAttributionAndPermissionUtils(attributionAndPermissionUtils) { }
 
     static AttributionSourceState buildAttributionSource(int callingPid, int callingUid) {
-        AttributionSourceState attributionSource{};
-        attributionSource.pid = callingPid;
-        attributionSource.uid = callingUid;
-        return attributionSource;
+        return AttributionAndPermissionUtils::buildAttributionSource(callingPid, callingUid);
     }
 
     static AttributionSourceState buildAttributionSource(int callingPid, int callingUid,
             int32_t deviceId) {
-        AttributionSourceState attributionSource = buildAttributionSource(callingPid, callingUid);
-        attributionSource.deviceId = deviceId;
-        return attributionSource;
+        return AttributionAndPermissionUtils::buildAttributionSource(
+                callingPid, callingUid, deviceId);
     }
 
     static AttributionSourceState buildAttributionSource(int callingPid, int callingUid,
@@ -158,6 +171,14 @@ public:
 
     void restoreCallingIdentity(int64_t token) const {
         mAttributionAndPermissionUtils->restoreCallingIdentity(token);
+    }
+
+    bool resolveClientUid(/*inout*/ int& clientUid) const {
+        return mAttributionAndPermissionUtils->resolveClientUid(clientUid);
+    }
+
+    bool resolveClientPid(/*inout*/ int& clientPid) const {
+        return mAttributionAndPermissionUtils->resolveClientPid(clientPid);
     }
 
     // The word 'System' here does not refer to callers only on the system

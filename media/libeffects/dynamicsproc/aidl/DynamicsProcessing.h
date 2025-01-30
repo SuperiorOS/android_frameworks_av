@@ -36,7 +36,6 @@ class DynamicsProcessingImpl final : public EffectImpl {
     ndk::ScopedAStatus open(const Parameter::Common& common,
                             const std::optional<Parameter::Specific>& specific,
                             OpenEffectReturn* ret) override;
-    ndk::ScopedAStatus commandImpl(CommandId command) REQUIRES(mImplMutex) override;
     ndk::ScopedAStatus getDescriptor(Descriptor* _aidl_return) override;
     ndk::ScopedAStatus setParameterSpecific(const Parameter::Specific& specific)
             REQUIRES(mImplMutex) override;

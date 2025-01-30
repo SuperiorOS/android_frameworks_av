@@ -20,6 +20,8 @@
 
 #include <android-base/macros.h>
 #include <binder/Parcel.h>
+#include <media/CodecCapabilities.h>
+#include <media/CodecCapabilitiesUtils.h>
 #include <media/stagefright/foundation/ABase.h>
 #include <media/stagefright/foundation/AString.h>
 
@@ -43,13 +45,10 @@ struct MediaCodecInfoWriter;
 struct MediaCodecListWriter;
 
 struct MediaCodecInfo : public RefBase {
-    struct ProfileLevel {
-        uint32_t mProfile;
-        uint32_t mLevel;
-        bool operator <(const ProfileLevel &o) const {
-            return mProfile < o.mProfile || (mProfile == o.mProfile && mLevel < o.mLevel);
-        }
-    };
+
+    // Moved to CodecCapabilitiesUtils.h
+    // Map MediaCodecInfo::ProfileLevel to android::ProfileLevel to maintain compatibility.
+    typedef ::android::ProfileLevel ProfileLevel;
 
     struct CapabilitiesWriter;
 

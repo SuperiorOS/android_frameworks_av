@@ -17,9 +17,10 @@
 #ifndef ANDROID_GUI_RINGBUFFERCONSUMER_H
 #define ANDROID_GUI_RINGBUFFERCONSUMER_H
 
+#include <com_android_graphics_libgui_flags.h>
 #include <gui/BufferItem.h>
-#include <gui/ConsumerBase.h>
 #include <gui/BufferQueue.h>
+#include <gui/ConsumerBase.h>
 
 #include <utils/List.h>
 
@@ -58,8 +59,12 @@ class RingBufferConsumer : public ConsumerBase,
     // the consumer usage flags passed to the graphics allocator. The
     // bufferCount parameter specifies how many buffers can be pinned for user
     // access at the same time.
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+    RingBufferConsumer(uint64_t consumerUsage, int bufferCount);
+#else
     RingBufferConsumer(const sp<IGraphicBufferConsumer>& consumer, uint64_t consumerUsage,
             int bufferCount);
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
 
     virtual ~RingBufferConsumer();
 

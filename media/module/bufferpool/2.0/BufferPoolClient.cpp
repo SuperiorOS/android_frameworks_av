@@ -762,6 +762,10 @@ ResultStatus BufferPoolClient::Impl::fetchBufferHandle(
     } else {
         connection = mRemoteConnection;
     }
+    if (!connection) {
+        ALOGE("connection null: fetchBufferHandle()");
+        return ResultStatus::CRITICAL_ERROR;
+    }
     ResultStatus status;
     Return<void> transResult = connection->fetch(
             transactionId, bufferId,

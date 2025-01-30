@@ -37,9 +37,9 @@ class DynamicsProcessingContext final : public EffectContext {
   public:
     DynamicsProcessingContext(int statusDepth, const Parameter::Common& common);
     ~DynamicsProcessingContext() = default;
-    RetCode enable();
-    RetCode disable();
-    void reset();
+    RetCode enable() override;
+    RetCode disable() override;
+    RetCode reset() override;
 
     // override EffectContext::setCommon to update mChannelCount
     RetCode setCommon(const Parameter::Common& common) override;

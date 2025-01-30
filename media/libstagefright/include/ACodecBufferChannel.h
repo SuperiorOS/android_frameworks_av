@@ -155,8 +155,8 @@ private:
     // obtained. Inside BufferInfo, mBufferId and mSharedEncryptedBuffer are
     // immutable objects. We write internal states of mClient/CodecBuffer when
     // the caller has given up the reference, so that access is also safe.
-    std::shared_ptr<const std::vector<const BufferInfo>> mInputBuffers;
-    std::shared_ptr<const std::vector<const BufferInfo>> mOutputBuffers;
+    std::shared_ptr<const std::vector<BufferInfo>> mInputBuffers;
+    std::shared_ptr<const std::vector<BufferInfo>> mOutputBuffers;
 
     sp<MemoryDealer> makeMemoryDealer(size_t heapSize);
 

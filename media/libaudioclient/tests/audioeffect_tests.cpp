@@ -70,8 +70,8 @@ sp<AudioEffect> createEffect(const effect_uuid_t* type, const effect_uuid_t* uui
     return effect;
 }
 
-status_t isEffectExistsOnAudioSession(const effect_uuid_t* type, const effect_uuid_t* uuid,
-                                      int priority, audio_session_t sessionId) {
+status_t createAndInitCheckEffect(const effect_uuid_t* type, const effect_uuid_t* uuid,
+                                  int priority, audio_session_t sessionId) {
     sp<AudioEffect> effect = createEffect(type, uuid, priority, sessionId);
     return effect->initCheck();
 }
@@ -272,10 +272,9 @@ TEST(AudioEffectTest, ManageSourceDefaultEffects) {
     EXPECT_FALSE(isEffectDefaultOnRecord(selectedEffectType, selectedEffectUuid,
                                          capture->getAudioRecordHandle()))
             << "Effect should not have been default on record. " << type;
-    EXPECT_EQ(NO_ERROR,
-              isEffectExistsOnAudioSession(selectedEffectType, selectedEffectUuid,
-                                           kDefaultInputEffectPriority - 1,
-                                           capture->getAudioRecordHandle()->getSessionId()))
+    EXPECT_EQ(NO_ERROR, createAndInitCheckEffect(selectedEffectType, selectedEffectUuid,
+                                                 kDefaultInputEffectPriority - 1,
+                                                 capture->getAudioRecordHandle()->getSessionId()))
             << "Effect should not have been added. " << type;
     EXPECT_EQ(OK, capture->audioProcess());
     EXPECT_EQ(OK, capture->stop());
@@ -296,9 +295,9 @@ TEST(AudioEffectTest, ManageSourceDefaultEffects) {
                                         capture->getAudioRecordHandle()))
             << "Effect should have been default on record. " << type;
     EXPECT_EQ(ALREADY_EXISTS,
-              isEffectExistsOnAudioSession(selectedEffectType, selectedEffectUuid,
-                                           kDefaultInputEffectPriority - 1,
-                                           capture->getAudioRecordHandle()->getSessionId()))
+              createAndInitCheckEffect(selectedEffectType, selectedEffectUuid,
+                                       kDefaultInputEffectPriority - 1,
+                                       capture->getAudioRecordHandle()->getSessionId()))
             << "Effect should have been added. " << type;
     EXPECT_EQ(OK, capture->audioProcess());
     EXPECT_EQ(OK, capture->stop());
@@ -313,10 +312,9 @@ TEST(AudioEffectTest, ManageSourceDefaultEffects) {
     EXPECT_FALSE(isEffectDefaultOnRecord(selectedEffectType, selectedEffectUuid,
                                          capture->getAudioRecordHandle()))
             << "Effect should not have been default on record. " << type;
-    EXPECT_EQ(NO_ERROR,
-              isEffectExistsOnAudioSession(selectedEffectType, selectedEffectUuid,
-                                           kDefaultInputEffectPriority - 1,
-                                           capture->getAudioRecordHandle()->getSessionId()))
+    EXPECT_EQ(NO_ERROR, createAndInitCheckEffect(selectedEffectType, selectedEffectUuid,
+                                                 kDefaultInputEffectPriority - 1,
+                                                 capture->getAudioRecordHandle()->getSessionId()))
             << "Effect should not have been added. " << type;
     EXPECT_EQ(OK, capture->audioProcess());
     EXPECT_EQ(OK, capture->stop());
@@ -421,8 +419,8 @@ TEST_P(AudioPlaybackEffectTest, StreamDefaultEffectTest) {
     EXPECT_EQ(NO_ERROR, playback->create());
     EXPECT_EQ(NO_ERROR, playback->start());
     EXPECT_EQ(compatCheck ? NO_ERROR : NO_INIT,
-              isEffectExistsOnAudioSession(&mType, &mUuid, kDefaultOutputEffectPriority - 1,
-                                           playback->getAudioTrackHandle()->getSessionId()))
+              createAndInitCheckEffect(&mType, &mUuid, kDefaultOutputEffectPriority - 1,
+                                       playback->getAudioTrackHandle()->getSessionId()))
             << "Effect should not have been added. " << mTypeStr;
     EXPECT_EQ(NO_ERROR, playback->waitForConsumption());
     playback->stop();
@@ -445,8 +443,8 @@ TEST_P(AudioPlaybackEffectTest, StreamDefaultEffectTest) {
     EXPECT_EQ(NO_ERROR, playback->start());
     // If effect chosen is not compatible with the session, then effect won't be applied
     EXPECT_EQ(compatCheck ? ALREADY_EXISTS : NO_INIT,
-              isEffectExistsOnAudioSession(&mType, &mUuid, kDefaultOutputEffectPriority - 1,
-                                           playback->getAudioTrackHandle()->getSessionId()))
+              createAndInitCheckEffect(&mType, &mUuid, kDefaultOutputEffectPriority - 1,
+                                       playback->getAudioTrackHandle()->getSessionId()))
             << "Effect should have been added. " << mTypeStr;
     EXPECT_EQ(NO_ERROR, playback->waitForConsumption());
     if (mSelectFastMode) {
@@ -467,8 +465,8 @@ TEST_P(AudioPlaybackEffectTest, StreamDefaultEffectTest) {
     EXPECT_EQ(NO_ERROR, playback->create());
     EXPECT_EQ(NO_ERROR, playback->start());
     EXPECT_EQ(compatCheck ? NO_ERROR : NO_INIT,
-              isEffectExistsOnAudioSession(&mType, &mUuid, kDefaultOutputEffectPriority - 1,
-                                           playback->getAudioTrackHandle()->getSessionId()))
+              createAndInitCheckEffect(&mType, &mUuid, kDefaultOutputEffectPriority - 1,
+                                       playback->getAudioTrackHandle()->getSessionId()))
             << "Effect should not have been added. " << mTypeStr;
     EXPECT_EQ(NO_ERROR, playback->waitForConsumption());
     playback->stop();
@@ -502,8 +500,8 @@ TEST_P(AudioPlaybackEffectTest, CheckOutputFlagCompatibility) {
     EXPECT_EQ(NO_ERROR, playback->create());
     EXPECT_EQ(NO_ERROR, playback->start());
 
-    EXPECT_EQ(ALREADY_EXISTS, isEffectExistsOnAudioSession(
-                                      &mType, &mUuid, kDefaultOutputEffectPriority - 1, sessionId))
+    EXPECT_EQ(ALREADY_EXISTS,
+              createAndInitCheckEffect(&mType, &mUuid, kDefaultOutputEffectPriority - 1, sessionId))
             << "Effect should have been added. " << mTypeStr;
     if (mSelectFastMode) {
         EXPECT_EQ(mIsFastCompatibleEffect ? AUDIO_OUTPUT_FLAG_FAST : 0,
@@ -556,8 +554,8 @@ TEST(AudioEffectTest, TestHapticEffect) {
     ASSERT_EQ(NO_ERROR, playback->loadResource("/data/local/tmp/bbb_2ch_24kHz_s16le.raw"));
     EXPECT_EQ(NO_ERROR, playback->create());
     EXPECT_EQ(NO_ERROR, playback->start());
-    EXPECT_TRUE(isEffectExistsOnAudioSession(selectedEffectType, selectedEffectUuid,
-                                             kDefaultOutputEffectPriority - 1, sessionId))
+    ASSERT_EQ(ALREADY_EXISTS, createAndInitCheckEffect(selectedEffectType, selectedEffectUuid,
+                                                       kDefaultOutputEffectPriority - 1, sessionId))
             << "Effect should have been added. " << type;
     EXPECT_EQ(NO_ERROR, playback->waitForConsumption());
     playback->stop();

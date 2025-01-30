@@ -22,12 +22,14 @@
 #include <aidl/android/hardware/camera/device/CameraBlobId.h>
 #include <camera/StringUtils.h>
 
-#include "api1/client2/JpegProcessor.h"
-#include "common/CameraProviderManager.h"
-#include "utils/SessionConfigurationUtils.h"
+#include <com_android_graphics_libgui_flags.h>
 #include <gui/Surface.h>
 #include <utils/Log.h>
 #include <utils/Trace.h>
+
+#include "api1/client2/JpegProcessor.h"
+#include "common/CameraProviderManager.h"
+#include "utils/SessionConfigurationUtils.h"
 
 #include "DepthCompositeStream.h"
 
@@ -48,7 +50,7 @@ DepthCompositeStream::DepthCompositeStream(sp<CameraDeviceBase> device,
         mBlobHeight(0),
         mDepthBufferAcquired(false),
         mBlobBufferAcquired(false),
-        mProducerListener(new ProducerListener()),
+        mStreamSurfaceListener(new StreamSurfaceListener()),
         mMaxJpegBufferSize(-1),
         mUHRMaxJpegBufferSize(-1),
         mIsLogicalCamera(false) {
@@ -614,6 +616,12 @@ status_t DepthCompositeStream::createInternalStreams(const std::vector<sp<Surfac
         return NO_INIT;
     }
 
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+    mBlobConsumer = new CpuConsumer(/*maxLockedBuffers*/ 1, /*controlledByApp*/ true);
+    mBlobConsumer->setFrameAvailableListener(this);
+    mBlobConsumer->setName(String8("Camera3-JpegCompositeStream"));
+    mBlobSurface = mBlobConsumer->getSurface();
+#else
     sp<IGraphicBufferProducer> producer;
     sp<IGraphicBufferConsumer> consumer;
     BufferQueue::createBufferQueue(&producer, &consumer);
@@ -621,6 +629,7 @@ status_t DepthCompositeStream::createInternalStreams(const std::vector<sp<Surfac
     mBlobConsumer->setFrameAvailableListener(this);
     mBlobConsumer->setName(String8("Camera3-JpegCompositeStream"));
     mBlobSurface = new Surface(producer);
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
 
     ret = device->createStream(mBlobSurface, width, height, format, kJpegDataSpace, rotation,
             id, physicalCameraId, sensorPixelModesUsed, surfaceIds,
@@ -639,11 +648,18 @@ status_t DepthCompositeStream::createInternalStreams(const std::vector<sp<Surfac
         return ret;
     }
 
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+    mDepthConsumer = new CpuConsumer(/*maxLockedBuffers*/ 1, /*controlledByApp*/ true);
+    mDepthConsumer->setFrameAvailableListener(this);
+    mDepthConsumer->setName(String8("Camera3-DepthCompositeStream"));
+    mDepthSurface = mDepthConsumer->getSurface();
+#else
     BufferQueue::createBufferQueue(&producer, &consumer);
     mDepthConsumer = new CpuConsumer(consumer, /*maxLockedBuffers*/ 1, /*controlledByApp*/ true);
     mDepthConsumer->setFrameAvailableListener(this);
     mDepthConsumer->setName(String8("Camera3-DepthCompositeStream"));
     mDepthSurface = new Surface(producer);
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
     std::vector<int> depthSurfaceId;
     ret = device->createStream(mDepthSurface, depthWidth, depthHeight, kDepthMapPixelFormat,
             kDepthMapDataSpace, rotation, &mDepthStreamId, physicalCameraId, sensorPixelModesUsed,
@@ -690,7 +706,7 @@ status_t DepthCompositeStream::configureStream() {
         return NO_INIT;
     }
 
-    auto res = mOutputSurface->connect(NATIVE_WINDOW_API_CAMERA, mProducerListener);
+    auto res = mOutputSurface->connect(NATIVE_WINDOW_API_CAMERA, mStreamSurfaceListener);
     if (res != OK) {
         ALOGE("%s: Unable to connect to native window for stream %d",
                 __FUNCTION__, mBlobStreamId);

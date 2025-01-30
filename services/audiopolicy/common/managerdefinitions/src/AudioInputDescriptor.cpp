@@ -30,9 +30,10 @@
 namespace android {
 
 AudioInputDescriptor::AudioInputDescriptor(const sp<IOProfile>& profile,
-                                           AudioPolicyClientInterface *clientInterface)
+                                           AudioPolicyClientInterface *clientInterface,
+                                           bool isPreemptor)
     : mProfile(profile)
-    ,  mClientInterface(clientInterface)
+    ,  mClientInterface(clientInterface), mIsPreemptor(isPreemptor)
 {
     if (profile != NULL) {
         profile->pickAudioProfile(mSamplingRate, mChannelMask, mFormat);
@@ -275,6 +276,9 @@ void AudioInputDescriptor::stop()
                             "%s invalid profile active count %u",
                             __func__, mProfile->curActiveCount);
         mProfile->curActiveCount--;
+        // allow preemption again now that at least one client was able to
+        // capture on this input
+        mIsPreemptor = false;
     }
 }
 

@@ -34,9 +34,8 @@ class LoudnessEnhancerContext final : public EffectContext {
     LoudnessEnhancerContext(int statusDepth, const Parameter::Common& common);
     ~LoudnessEnhancerContext() = default;
 
-    RetCode enable();
-    RetCode disable();
-    void reset();
+    RetCode enable() override;
+    RetCode disable() override;
 
     RetCode setLeGain(int gainMb);
     int getLeGain() const { return mGain; }

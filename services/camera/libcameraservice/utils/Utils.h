@@ -19,8 +19,19 @@
 
 #include <sched.h>
 #include <unistd.h>
+#include <type_traits>
 
 namespace android {
+
+/**
+ * Magically convert an enum to its underlying integer type, mostly so they can be
+ * printed with printf-style formatters without warnings.
+ * Backport of C++23 std::to_underlying()
+ */
+template<typename Enum>
+constexpr std::underlying_type_t<Enum> eToI(Enum val) {
+    return static_cast<std::underlying_type_t<Enum>>(val);
+}
 
 /**
  * As of Android V, ro.board.api_level returns the year and month of release (ex. 202404)

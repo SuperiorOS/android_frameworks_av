@@ -51,7 +51,7 @@ static const std::vector<legacy_strategy_map>& getLegacyStrategy() {
         { "STRATEGY_TRANSMITTED_THROUGH_SPEAKER", STRATEGY_TRANSMITTED_THROUGH_SPEAKER },
         { "STRATEGY_ACCESSIBILITY", STRATEGY_ACCESSIBILITY },
         { "STRATEGY_REROUTING", STRATEGY_REROUTING },
-        { "STRATEGY_PATCH", STRATEGY_REROUTING }, // boiler to manage stream patch volume
+        { "STRATEGY_PATCH", STRATEGY_PATCH }, // boiler to manage stream patch volume
         { "STRATEGY_CALL_ASSISTANT", STRATEGY_CALL_ASSISTANT },
     };
     return legacyStrategy;
@@ -143,7 +143,8 @@ status_t Engine::setForceUse(audio_policy_force_use_t usage, audio_policy_forced
         }
         break;
     case AUDIO_POLICY_FORCE_FOR_VIBRATE_RINGING:
-        if (config != AUDIO_POLICY_FORCE_BT_SCO && config != AUDIO_POLICY_FORCE_NONE) {
+        if (config != AUDIO_POLICY_FORCE_BT_SCO && config != AUDIO_POLICY_FORCE_BT_BLE
+                && config != AUDIO_POLICY_FORCE_NONE) {
             ALOGW("setForceUse() invalid config %d for VIBRATE_RINGING", config);
             return BAD_VALUE;
         }
@@ -402,6 +403,40 @@ DeviceVector Engine::getDevicesForStrategyInt(legacy_strategy strategy,
                 }
             }
         }
+
+        // if LEA headset is connected and we are told to use it, play ringtone over
+        // speaker and BT LEA
+        if (!availableOutputDevices.getDevicesFromTypes(getAudioDeviceOutAllBleSet()).isEmpty()) {
+            DeviceVector devices2;
+            devices2 = availableOutputDevices.getFirstDevicesFromTypes({
+                    AUDIO_DEVICE_OUT_BLE_HEADSET, AUDIO_DEVICE_OUT_BLE_SPEAKER});
+            // Use ONLY Bluetooth LEA output when ringing in vibration mode
+            if (!((getForceUse(AUDIO_POLICY_FORCE_FOR_SYSTEM) == AUDIO_POLICY_FORCE_SYSTEM_ENFORCED)
+                    && (strategy == STRATEGY_ENFORCED_AUDIBLE))) {
+                if (getForceUse(AUDIO_POLICY_FORCE_FOR_VIBRATE_RINGING)
+                        == AUDIO_POLICY_FORCE_BT_BLE) {
+                    if (!devices2.isEmpty()) {
+                        devices = devices2;
+                        break;
+                    }
+                }
+            }
+            // Use both Bluetooth LEA and phone default output when ringing in normal mode
+            if (audio_is_ble_out_device(getPreferredDeviceTypeForLegacyStrategy(
+                    availableOutputDevices, STRATEGY_PHONE))) {
+                if (strategy == STRATEGY_SONIFICATION) {
+                    devices.replaceDevicesByType(
+                            AUDIO_DEVICE_OUT_SPEAKER,
+                            availableOutputDevices.getDevicesFromType(
+                                    AUDIO_DEVICE_OUT_SPEAKER_SAFE));
+                }
+                if (!devices2.isEmpty()) {
+                    devices.add(devices2);
+                    break;
+                }
+            }
+        }
+
         // The second device used for sonification is the same as the device used by media strategy
         FALLTHROUGH_INTENDED;
 
@@ -428,10 +463,13 @@ DeviceVector Engine::getDevicesForStrategyInt(legacy_strategy strategy,
 
         // LE audio broadcast device is only used if:
         // - No call is active
-        // - either MEDIA or SONIFICATION_RESPECTFUL is the highest priority active strategy
-        //   OR the LE audio unicast device is not active
+        // - the highest priority active strategy is not PHONE or TRANSMITTED_THROUGH_SPEAKER
+        // OR the LE audio unicast device is not active
         if (devices2.isEmpty() && !isInCall()
-                && (strategy == STRATEGY_MEDIA || strategy == STRATEGY_SONIFICATION_RESPECTFUL)) {
+                // also skipping routing queries from PHONE and TRANSMITTED_THROUGH_SPEAKER here
+                // so this code is not dependent on breaks for other strategies above
+                && (strategy != STRATEGY_PHONE)
+                && (strategy != STRATEGY_TRANSMITTED_THROUGH_SPEAKER)) {
             legacy_strategy topActiveStrategy = STRATEGY_NONE;
             for (const auto &ps : getOrderedProductStrategies()) {
                 if (outputs.isStrategyActive(ps)) {
@@ -441,8 +479,8 @@ DeviceVector Engine::getDevicesForStrategyInt(legacy_strategy strategy,
                 }
             }
 
-            if (topActiveStrategy == STRATEGY_NONE || topActiveStrategy == STRATEGY_MEDIA
-                    || topActiveStrategy == STRATEGY_SONIFICATION_RESPECTFUL
+            if ((topActiveStrategy != STRATEGY_PHONE
+                        && topActiveStrategy != STRATEGY_TRANSMITTED_THROUGH_SPEAKER)
                     || !outputs.isAnyDeviceTypeActive(getAudioDeviceOutLeAudioUnicastSet())) {
                 devices2 =
                         availableOutputDevices.getDevicesFromType(AUDIO_DEVICE_OUT_BLE_BROADCAST);

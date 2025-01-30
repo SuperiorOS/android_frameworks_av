@@ -602,6 +602,7 @@ AAUDIO_API aaudio_policy_t AAudio_getMMapPolicy() {
 }
 
 AAUDIO_API aaudio_result_t AAudio_setMMapPolicy(aaudio_policy_t policy) {
+    ALOGD("%s(%d)", __func__, policy);
     return AudioGlobal_setMMapPolicy(policy);
 }
 

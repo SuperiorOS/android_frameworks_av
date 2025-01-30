@@ -119,7 +119,9 @@ class DeviceHalAidl : public DeviceHalInterface, public ConversionHelperAidl,
     // by releasing all references to the returned object.
     status_t openOutputStream(audio_io_handle_t handle, audio_devices_t devices,
                               audio_output_flags_t flags, struct audio_config* config,
-                              const char* address, sp<StreamOutHalInterface>* outStream) override;
+                              const char* address, sp<StreamOutHalInterface>* outStream,
+                              const std::vector<playback_track_metadata_v7_t>&
+                                                               sourceMetadata = {}) override;
 
     // Creates and opens the audio hardware input stream. The stream is closed
     // by releasing all references to the returned object.
@@ -233,7 +235,6 @@ class DeviceHalAidl : public DeviceHalInterface, public ConversionHelperAidl,
     // MicrophoneInfoProvider implementation
     MicrophoneInfoProvider::Info const* getMicrophoneInfo() override;
 
-    const std::string mInstance;
     const std::shared_ptr<::aidl::android::hardware::audio::core::IModule> mModule;
     const std::shared_ptr<::aidl::android::media::audio::IHalAdapterVendorExtension> mVendorExt;
     const std::shared_ptr<::aidl::android::hardware::audio::core::ITelephony> mTelephony;
@@ -242,8 +243,11 @@ class DeviceHalAidl : public DeviceHalInterface, public ConversionHelperAidl,
     const std::shared_ptr<::aidl::android::hardware::audio::core::IBluetoothLe> mBluetoothLe;
     const std::shared_ptr<::aidl::android::hardware::audio::core::sounddose::ISoundDose> mSoundDose;
 
+    std::mutex mCallbacksLock;
+    // Use 'mCallbacksLock' only to implement exclusive access to 'mCallbacks'. Never hold it
+    // while making any calls.
+    std::map<void*, Callbacks> mCallbacks GUARDED_BY(mCallbacksLock);
     std::mutex mLock;
-    std::map<void*, Callbacks> mCallbacks GUARDED_BY(mLock);
     std::set<audio_port_handle_t> mDeviceDisconnectionNotified GUARDED_BY(mLock);
     Hal2AidlMapper mMapper GUARDED_BY(mLock);
     LockedAccessor<Hal2AidlMapper> mMapperAccessor;

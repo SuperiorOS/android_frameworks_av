@@ -134,6 +134,9 @@ cc_defaults {
         "libaudiomanager",
         "libaudiopolicy",
     ],
+    cflags: [
+        "-Wthread-safety",
+    ],
     data: ["bbb*.raw"],
     srcs: [
         "audio_test_utils.cpp",

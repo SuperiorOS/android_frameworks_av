@@ -108,30 +108,32 @@ void AudioSystemTest::createRecordSession(void) {
 // UNIT TESTS
 TEST_F(AudioSystemTest, CheckServerSideValues) {
     ASSERT_NO_FATAL_FAILURE(createPlaybackSession());
-    EXPECT_GT(mAF->sampleRate(mCbPlayback->mAudioIo), 0);
-    EXPECT_NE(mAF->format(mCbPlayback->mAudioIo), AUDIO_FORMAT_INVALID);
-    EXPECT_GT(mAF->frameCount(mCbPlayback->mAudioIo), 0);
+    const auto [pbAudioIo, _] = mCbPlayback->getLastPortAndDevice();
+    EXPECT_GT(mAF->sampleRate(pbAudioIo), 0);
+    EXPECT_NE(mAF->format(pbAudioIo), AUDIO_FORMAT_INVALID);
+    EXPECT_GT(mAF->frameCount(pbAudioIo), 0);
     size_t frameCountHal, frameCountHalCache;
-    frameCountHal = mAF->frameCountHAL(mCbPlayback->mAudioIo);
+    frameCountHal = mAF->frameCountHAL(pbAudioIo);
     EXPECT_GT(frameCountHal, 0);
-    EXPECT_EQ(OK, AudioSystem::getFrameCountHAL(mCbPlayback->mAudioIo, &frameCountHalCache));
+    EXPECT_EQ(OK, AudioSystem::getFrameCountHAL(pbAudioIo, &frameCountHalCache));
     EXPECT_EQ(frameCountHal, frameCountHalCache);
-    EXPECT_GT(mAF->latency(mCbPlayback->mAudioIo), 0);
+    EXPECT_GT(mAF->latency(pbAudioIo), 0);
     // client side latency is at least server side latency
-    EXPECT_LE(mAF->latency(mCbPlayback->mAudioIo), mPlayback->getAudioTrackHandle()->latency());
+    EXPECT_LE(mAF->latency(pbAudioIo), mPlayback->getAudioTrackHandle()->latency());
 
     ASSERT_NO_FATAL_FAILURE(createRecordSession());
-    EXPECT_GT(mAF->sampleRate(mCbRecord->mAudioIo), 0);
-    // EXPECT_NE(mAF->format(mCbRecord->mAudioIo), AUDIO_FORMAT_INVALID);
-    EXPECT_GT(mAF->frameCount(mCbRecord->mAudioIo), 0);
-    EXPECT_GT(mAF->frameCountHAL(mCbRecord->mAudioIo), 0);
-    frameCountHal = mAF->frameCountHAL(mCbRecord->mAudioIo);
+    const auto [recAudioIo, __] = mCbRecord->getLastPortAndDevice();
+    EXPECT_GT(mAF->sampleRate(recAudioIo), 0);
+    // EXPECT_NE(mAF->format(recAudioIo), AUDIO_FORMAT_INVALID);
+    EXPECT_GT(mAF->frameCount(recAudioIo), 0);
+    EXPECT_GT(mAF->frameCountHAL(recAudioIo), 0);
+    frameCountHal = mAF->frameCountHAL(recAudioIo);
     EXPECT_GT(frameCountHal, 0);
-    EXPECT_EQ(OK, AudioSystem::getFrameCountHAL(mCbRecord->mAudioIo, &frameCountHalCache));
+    EXPECT_EQ(OK, AudioSystem::getFrameCountHAL(recAudioIo, &frameCountHalCache));
     EXPECT_EQ(frameCountHal, frameCountHalCache);
-    // EXPECT_GT(mAF->latency(mCbRecord->mAudioIo), 0);
+    // EXPECT_GT(mAF->latency(recAudioIo), 0);
     // client side latency is at least server side latency
-    // EXPECT_LE(mAF->latency(mCbRecord->mAudioIo), mCapture->getAudioRecordHandle()->latency());
+    // EXPECT_LE(mAF->latency(recAudioIo), mCapture->getAudioRecordHandle()->latency());
 
     EXPECT_GT(AudioSystem::getPrimaryOutputSamplingRate(), 0);  // first fast mixer sample rate
     EXPECT_GT(AudioSystem::getPrimaryOutputFrameCount(), 0);    // fast mixer frame count
@@ -195,19 +197,6 @@ TEST_F(AudioSystemTest, GetSetMasterBalance) {
     EXPECT_EQ(OK, AudioSystem::setMasterBalance(origBalance));
     EXPECT_EQ(OK, AudioSystem::getMasterBalance(&tstBalance));
     EXPECT_EQ(origBalance, tstBalance);
-}
-
-TEST_F(AudioSystemTest, GetStreamVolume) {
-    ASSERT_NO_FATAL_FAILURE(createPlaybackSession());
-    float origStreamVol;
-    EXPECT_EQ(NO_ERROR, AudioSystem::getStreamVolume(AUDIO_STREAM_MUSIC, &origStreamVol,
-                                                     mCbPlayback->mAudioIo));
-}
-
-TEST_F(AudioSystemTest, GetStreamMute) {
-    ASSERT_NO_FATAL_FAILURE(createPlaybackSession());
-    bool origMuteState;
-    EXPECT_EQ(NO_ERROR, AudioSystem::getStreamMute(AUDIO_STREAM_MUSIC, &origMuteState));
 }
 
 TEST_F(AudioSystemTest, StartAndStopAudioSource) {

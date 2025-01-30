@@ -310,6 +310,7 @@ Status ResourceManagerService::addResource(const ClientInfoParcel& clientInfo,
     mServiceLog->add(log);
 
     std::scoped_lock lock{mLock};
+    ClientInfoParcel updatedClientInfo = clientInfo;
     if (!mProcessInfo->isPidUidTrusted(pid, uid)) {
         pid_t callingPid = IPCThreadState::self()->getCallingPid();
         uid_t callingUid = IPCThreadState::self()->getCallingUid();
@@ -317,6 +318,8 @@ Status ResourceManagerService::addResource(const ClientInfoParcel& clientInfo,
                 __FUNCTION__, pid, uid, callingPid, callingUid);
         pid = callingPid;
         uid = callingUid;
+        updatedClientInfo.pid = callingPid;
+        updatedClientInfo.uid = callingUid;
     }
     ResourceInfos& infos = getResourceInfosForEdit(pid, mMap);
     ResourceInfo& info = getResourceInfoForEdit(clientInfo, client, infos);
@@ -342,7 +345,7 @@ Status ResourceManagerService::addResource(const ClientInfoParcel& clientInfo,
     }
     if (info.deathNotifier == nullptr && client != nullptr) {
         info.deathNotifier = DeathNotifier::Create(
-            client, ref<ResourceManagerService>(), clientInfo);
+            client, ref<ResourceManagerService>(), updatedClientInfo);
     }
     if (mObserverService != nullptr && !resourceAdded.empty()) {
         mObserverService->onResourceAdded(uid, pid, resourceAdded);

@@ -349,7 +349,7 @@ status_t AidlCamera3Device::initialize(sp<CameraProviderManager> manager,
                 readoutSupported.data.u8[0] == ANDROID_SENSOR_READOUT_TIMESTAMP_HARDWARE;
     }
 
-    return initializeCommonLocked();
+    return initializeCommonLocked(manager);
 }
 
 ::ndk::ScopedAStatus AidlCamera3Device::AidlCameraDeviceCallbacks::processCaptureResult(

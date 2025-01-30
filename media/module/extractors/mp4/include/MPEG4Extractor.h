@@ -96,7 +96,7 @@ private:
 
         uint8_t *mTx3gBuffer;
         size_t mTx3gSize, mTx3gFilled;
-
+        int64_t mMdhdDurationUs;
 
         Track() {
             next = NULL;

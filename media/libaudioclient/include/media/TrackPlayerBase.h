@@ -19,6 +19,7 @@
 
 #include <media/AudioTrack.h>
 #include <media/PlayerBase.h>
+#include <mediautils/Synchronization.h>
 
 namespace android {
 
@@ -37,10 +38,11 @@ public:
             const media::VolumeShaperConfiguration& configuration,
             const media::VolumeShaperOperation& operation);
 
-    //FIXME move to protected field, so far made public to minimize changes to AudioTrack logic
-    sp<AudioTrack> mAudioTrack;
+    sp<AudioTrack> getAudioTrack() { return mAudioTrack.load(); }
 
-            void setPlayerVolume(float vl, float vr);
+    void clearAudioTrack() { mAudioTrack.store(nullptr); }
+
+    void setPlayerVolume(float vl, float vr);
 
 protected:
 
@@ -68,6 +70,7 @@ private:
     float mPlayerVolumeL, mPlayerVolumeR;
     sp<AudioTrack::IAudioTrackCallback> mCallbackHandle;
     sp<SelfAudioDeviceCallback> mSelfAudioDeviceCallback;
+    mediautils::atomic_sp<AudioTrack> mAudioTrack;
 };
 
 } // namespace android

@@ -1,0 +1,96 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Copyright (C) 2018 The Android Open Source Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+-->
+<criterion_types>
+    <criterion_type name="OutputDevicesMaskType" type="inclusive"/>
+    <criterion_type name="InputDevicesMaskType" type="inclusive"/>
+    <criterion_type name="OutputDevicesAddressesType" type="inclusive">
+        <values>
+            <!-- legacy remote submix -->
+            <value literal="0" numerical="1"/>
+        </values>
+    </criterion_type>
+    <criterion_type name="InputDevicesAddressesType" type="inclusive">
+        <values>
+            <!-- legacy remote submix -->
+            <value literal="0" numerical="1"/>
+        </values>
+    </criterion_type>
+    <criterion_type name="AndroidModeType" type="exclusive"/>
+    <criterion_type name="ForceUseForCommunicationType" type="exclusive">
+        <values>
+            <value literal="NONE" numerical="0"/>
+            <value literal="SPEAKER" numerical="1"/>
+            <value literal="BT_SCO" numerical="3"/>
+        </values>
+    </criterion_type>
+    <criterion_type name="ForceUseForMediaType" type="exclusive">
+        <values>
+            <value literal="NONE" numerical="0"/>
+            <value literal="SPEAKER" numerical="1"/>
+            <value literal="HEADPHONES" numerical="2"/>
+            <value literal="BT_A2DP" numerical="4"/>
+            <value literal="WIRED_ACCESSORY" numerical="5"/>
+            <value literal="ANALOG_DOCK" numerical="8"/>
+            <value literal="DIGITAL_DOCK" numerical="9"/>
+            <value literal="NO_BT_A2DP" numerical="10"/>
+        </values>
+    </criterion_type>
+    <criterion_type name="ForceUseForRecordType" type="exclusive">
+        <values>
+            <value literal="NONE" numerical="0"/>
+            <value literal="BT_SCO" numerical="3"/>
+            <value literal="WIRED_ACCESSORY" numerical="5"/>
+        </values>
+    </criterion_type>
+    <criterion_type name="ForceUseForDockType" type="exclusive">
+        <values>
+            <value literal="NONE" numerical="0"/>
+            <value literal="WIRED_ACCESSORY" numerical="5"/>
+            <value literal="BT_CAR_DOCK" numerical="6"/>
+            <value literal="BT_DESK_DOCK" numerical="7"/>
+            <value literal="ANALOG_DOCK" numerical="8"/>
+            <value literal="DIGITAL_DOCK" numerical="9"/>
+        </values>
+    </criterion_type>
+    <criterion_type name="ForceUseForSystemType" type="exclusive" >
+        <values>
+            <value literal="NONE" numerical="0"/>
+            <value literal="SYSTEM_ENFORCED" numerical="11"/>
+        </values>
+    </criterion_type>
+    <criterion_type name="ForceUseForHdmiSystemAudioType" type="exclusive">
+        <values>
+            <value literal="NONE" numerical="0"/>
+            <value literal="HDMI_SYSTEM_AUDIO_ENFORCED" numerical="12"/>
+        </values>
+    </criterion_type>
+    <criterion_type name="ForceUseForEncodedSurroundType" type="exclusive">
+        <values>
+            <value literal="NONE" numerical="0"/>
+            <value literal="ENCODED_SURROUND_NEVER" numerical="13"/>
+            <value literal="ENCODED_SURROUND_ALWAYS" numerical="14"/>
+            <value literal="ENCODED_SURROUND_MANUAL" numerical="15"/>
+        </values>
+    </criterion_type>
+    <criterion_type name="ForceUseForVibrateRingingType" type="exclusive">
+        <values>
+            <value literal="NONE" numerical="0"/>
+            <value literal="BT_SCO" numerical="3"/>
+        </values>
+    </criterion_type>
+</criterion_types>
+
+

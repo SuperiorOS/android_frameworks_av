@@ -32,7 +32,6 @@ class VisualizerImpl final : public EffectImpl {
     VisualizerImpl() = default;
     ~VisualizerImpl() { cleanUp(); }
 
-    ndk::ScopedAStatus commandImpl(CommandId command) REQUIRES(mImplMutex) override;
     ndk::ScopedAStatus getDescriptor(Descriptor* _aidl_return) override;
     ndk::ScopedAStatus setParameterSpecific(const Parameter::Specific& specific)
             REQUIRES(mImplMutex) override;

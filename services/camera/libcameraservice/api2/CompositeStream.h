@@ -23,7 +23,7 @@
 #include <android/hardware/camera2/ICameraDeviceCallbacks.h>
 #include <camera/CameraMetadata.h>
 #include <camera/camera2/OutputConfiguration.h>
-#include <gui/IProducerListener.h>
+#include <gui/Surface.h>
 #include "common/CameraDeviceBase.h"
 #include "device3/Camera3StreamInterface.h"
 
@@ -96,9 +96,12 @@ public:
             const CameraMetadata& settings) override;
 
 protected:
-    struct ProducerListener : public BnProducerListener {
-        // ProducerListener impementation
+    struct StreamSurfaceListener : public SurfaceListener {
+        // StreamSurfaceListener implementation
         void onBufferReleased() override { /*No impl. for now*/ };
+        bool needsReleaseNotify() override { return true; };
+        void onBuffersDiscarded(const std::vector<sp<GraphicBuffer>>& /*buffers*/) override {};
+        void onBufferDetached(int /*slot*/) override {};
     };
 
     status_t registerCompositeStreamListener(int32_t streamId);

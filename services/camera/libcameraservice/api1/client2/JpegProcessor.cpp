@@ -25,9 +25,10 @@
 
 #include <binder/MemoryBase.h>
 #include <binder/MemoryHeapBase.h>
+#include <com_android_graphics_libgui_flags.h>
+#include <gui/Surface.h>
 #include <utils/Log.h>
 #include <utils/Trace.h>
-#include <gui/Surface.h>
 
 #include "common/CameraDeviceBase.h"
 #include "api1/Camera2Client.h"
@@ -93,6 +94,12 @@ status_t JpegProcessor::updateStream(const Parameters &params) {
 
     if (mCaptureConsumer == 0) {
         // Create CPU buffer queue endpoint
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+        mCaptureConsumer = new CpuConsumer(1);
+        mCaptureConsumer->setFrameAvailableListener(this);
+        mCaptureConsumer->setName(String8("Camera2-JpegConsumer"));
+        mCaptureWindow = mCaptureConsumer->getSurface();
+#else
         sp<IGraphicBufferProducer> producer;
         sp<IGraphicBufferConsumer> consumer;
         BufferQueue::createBufferQueue(&producer, &consumer);
@@ -100,6 +107,7 @@ status_t JpegProcessor::updateStream(const Parameters &params) {
         mCaptureConsumer->setFrameAvailableListener(this);
         mCaptureConsumer->setName(String8("Camera2-JpegConsumer"));
         mCaptureWindow = new Surface(producer);
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
     }
 
     // Since ashmem heaps are rounded up to page size, don't reallocate if

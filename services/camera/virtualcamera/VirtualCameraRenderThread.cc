@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
+// #define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCameraRenderThread"
 #include "VirtualCameraRenderThread.h"
+
+#include <android_companion_virtualdevice_flags.h>
 
 #include <chrono>
 #include <cstdint>
@@ -29,6 +32,7 @@
 
 #include "Exif.h"
 #include "GLES/gl.h"
+#include "VirtualCameraCaptureResult.h"
 #include "VirtualCameraDevice.h"
 #include "VirtualCameraSessionContext.h"
 #include "aidl/android/hardware/camera/common/Status.h"
@@ -45,13 +49,11 @@
 #include "android-base/thread_annotations.h"
 #include "android/binder_auto_utils.h"
 #include "android/hardware_buffer.h"
-#include "hardware/gralloc.h"
 #include "system/camera_metadata.h"
 #include "ui/GraphicBuffer.h"
 #include "ui/Rect.h"
 #include "util/EglFramebuffer.h"
 #include "util/JpegUtil.h"
-#include "util/MetadataUtil.h"
 #include "util/Util.h"
 #include "utils/Errors.h"
 
@@ -90,96 +92,13 @@ overloaded(Ts...) -> overloaded<Ts...>;
 
 using namespace std::chrono_literals;
 
-static constexpr std::chrono::milliseconds kAcquireFenceTimeout = 500ms;
+namespace flags = ::android::companion::virtualdevice::flags;
 
-// See REQUEST_PIPELINE_DEPTH in CaptureResult.java.
-// This roughly corresponds to frame latency, we set to
-// documented minimum of 2.
-static constexpr uint8_t kPipelineDepth = 2;
+static constexpr std::chrono::milliseconds kAcquireFenceTimeout = 500ms;
 
 static constexpr size_t kJpegThumbnailBufferSize = 32 * 1024;  // 32 KiB
 
 static constexpr UpdateTextureTask kUpdateTextureTask;
-
-CameraMetadata createCaptureResultMetadata(
-    const std::chrono::nanoseconds timestamp,
-    const RequestSettings& requestSettings,
-    const Resolution reportedSensorSize) {
-  // All of the keys used in the response needs to be referenced in
-  // availableResultKeys in CameraCharacteristics (see initCameraCharacteristics
-  // in VirtualCameraDevice.cc).
-  MetadataBuilder builder =
-      MetadataBuilder()
-          .setAberrationCorrectionMode(
-              ANDROID_COLOR_CORRECTION_ABERRATION_MODE_OFF)
-          .setControlAeAvailableAntibandingModes(
-              {ANDROID_CONTROL_AE_ANTIBANDING_MODE_OFF})
-          .setControlAeAntibandingMode(ANDROID_CONTROL_AE_ANTIBANDING_MODE_OFF)
-          .setControlAeExposureCompensation(0)
-          .setControlAeLockAvailable(false)
-          .setControlAeLock(ANDROID_CONTROL_AE_LOCK_OFF)
-          .setControlAeMode(ANDROID_CONTROL_AE_MODE_ON)
-          .setControlAePrecaptureTrigger(
-              // Limited devices are expected to have precapture ae enabled and
-              // respond to cancellation request. Since we don't actuall support
-              // AE at all, let's just respect the cancellation expectation in
-              // case it's requested
-              requestSettings.aePrecaptureTrigger ==
-                      ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL
-                  ? ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL
-                  : ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_IDLE)
-          .setControlAeState(ANDROID_CONTROL_AE_STATE_INACTIVE)
-          .setControlAfMode(ANDROID_CONTROL_AF_MODE_OFF)
-          .setControlAfTrigger(ANDROID_CONTROL_AF_TRIGGER_IDLE)
-          .setControlAfState(ANDROID_CONTROL_AF_STATE_INACTIVE)
-          .setControlAwbMode(ANDROID_CONTROL_AWB_MODE_AUTO)
-          .setControlAwbLock(ANDROID_CONTROL_AWB_LOCK_OFF)
-          .setControlAwbState(ANDROID_CONTROL_AWB_STATE_INACTIVE)
-          .setControlCaptureIntent(requestSettings.captureIntent)
-          .setControlEffectMode(ANDROID_CONTROL_EFFECT_MODE_OFF)
-          .setControlMode(ANDROID_CONTROL_MODE_AUTO)
-          .setControlSceneMode(ANDROID_CONTROL_SCENE_MODE_DISABLED)
-          .setControlVideoStabilizationMode(
-              ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_OFF)
-          .setCropRegion(0, 0, reportedSensorSize.width,
-                         reportedSensorSize.height)
-          .setFaceDetectMode(ANDROID_STATISTICS_FACE_DETECT_MODE_OFF)
-          .setFlashState(ANDROID_FLASH_STATE_UNAVAILABLE)
-          .setFlashMode(ANDROID_FLASH_MODE_OFF)
-          .setFocalLength(VirtualCameraDevice::kFocalLength)
-          .setJpegQuality(requestSettings.jpegQuality)
-          .setJpegOrientation(requestSettings.jpegOrientation)
-          .setJpegThumbnailSize(requestSettings.thumbnailResolution.width,
-                                requestSettings.thumbnailResolution.height)
-          .setJpegThumbnailQuality(requestSettings.thumbnailJpegQuality)
-          .setLensOpticalStabilizationMode(
-              ANDROID_LENS_OPTICAL_STABILIZATION_MODE_OFF)
-          .setNoiseReductionMode(ANDROID_NOISE_REDUCTION_MODE_OFF)
-          .setPipelineDepth(kPipelineDepth)
-          .setSensorTimestamp(timestamp)
-          .setStatisticsHotPixelMapMode(
-              ANDROID_STATISTICS_HOT_PIXEL_MAP_MODE_OFF)
-          .setStatisticsLensShadingMapMode(
-              ANDROID_STATISTICS_LENS_SHADING_MAP_MODE_OFF)
-          .setStatisticsSceneFlicker(ANDROID_STATISTICS_SCENE_FLICKER_NONE);
-
-  if (requestSettings.fpsRange.has_value()) {
-    builder.setControlAeTargetFpsRange(requestSettings.fpsRange.value());
-  }
-
-  if (requestSettings.gpsCoordinates.has_value()) {
-    const GpsCoordinates& coordinates = requestSettings.gpsCoordinates.value();
-    builder.setJpegGpsCoordinates(coordinates);
-  }
-
-  std::unique_ptr<CameraMetadata> metadata = builder.build();
-
-  if (metadata == nullptr) {
-    ALOGE("%s: Failed to build capture result metadata", __func__);
-    return CameraMetadata();
-  }
-  return std::move(*metadata);
-}
 
 NotifyMsg createShutterNotifyMsg(int frameNumber,
                                  std::chrono::nanoseconds timestamp) {
@@ -201,12 +120,12 @@ NotifyMsg createBufferErrorNotifyMsg(int frameNumber, int streamId) {
 
 NotifyMsg createRequestErrorNotifyMsg(int frameNumber) {
   NotifyMsg msg;
-  msg.set<NotifyMsg::Tag::error>(ErrorMsg{
-      .frameNumber = frameNumber,
-      // errorStreamId needs to be set to -1 for ERROR_REQUEST
-      // (not tied to specific stream).
-      .errorStreamId = -1,
-      .errorCode = ErrorCode::ERROR_REQUEST});
+  msg.set<NotifyMsg::Tag::error>(
+      ErrorMsg{.frameNumber = frameNumber,
+               // errorStreamId needs to be set to -1 for ERROR_REQUEST
+               // (not tied to specific stream).
+               .errorStreamId = -1,
+               .errorCode = ErrorCode::ERROR_REQUEST});
   return msg;
 }
 
@@ -497,29 +416,8 @@ void VirtualCameraRenderThread::processTask(
                                                     std::memory_order_relaxed));
 
   if (request.getRequestSettings().fpsRange) {
-    const int maxFps =
-        std::max(1, request.getRequestSettings().fpsRange->maxFps);
-    const std::chrono::nanoseconds minFrameDuration(
-        static_cast<uint64_t>(1e9 / maxFps));
-    const std::chrono::nanoseconds frameDuration =
-        timestamp - lastAcquisitionTimestamp;
-    if (frameDuration < minFrameDuration) {
-      // We're too fast for the configured maxFps, let's wait a bit.
-      const std::chrono::nanoseconds sleepTime =
-          minFrameDuration - frameDuration;
-      ALOGV("Current frame duration would  be %" PRIu64
-            " ns corresponding to, "
-            "sleeping for %" PRIu64
-            " ns before updating texture to match maxFps %d",
-            static_cast<uint64_t>(frameDuration.count()),
-            static_cast<uint64_t>(sleepTime.count()), maxFps);
-
-      std::this_thread::sleep_for(sleepTime);
-      timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch());
-      mLastAcquisitionTimestampNanoseconds.store(timestamp.count(),
-                                                 std::memory_order_relaxed);
-    }
+    int maxFps = std::max(1, request.getRequestSettings().fpsRange->maxFps);
+    timestamp = throttleRendering(maxFps, lastAcquisitionTimestamp, timestamp);
   }
 
   // Calculate the maximal amount of time we can afford to wait for next frame.
@@ -547,6 +445,17 @@ void VirtualCameraRenderThread::processTask(
   }
   // Acquire new (most recent) image from the Surface.
   mEglSurfaceTexture->updateTexture();
+  std::chrono::nanoseconds captureTimestamp = timestamp;
+
+  if (flags::camera_timestamp_from_surface()) {
+    std::chrono::nanoseconds surfaceTimestamp =
+        getSurfaceTimestamp(elapsedDuration);
+    if (surfaceTimestamp.count() > 0) {
+      captureTimestamp = surfaceTimestamp;
+    }
+    ALOGV("%s captureTimestamp:%lld timestamp:%lld", __func__,
+          captureTimestamp.count(), timestamp.count());
+  }
 
   CaptureResult captureResult;
   captureResult.fmqResultSize = 0;
@@ -556,7 +465,7 @@ void VirtualCameraRenderThread::processTask(
   captureResult.inputBuffer.streamId = -1;
   captureResult.physicalCameraMetadata.resize(0);
   captureResult.result = createCaptureResultMetadata(
-      timestamp, request.getRequestSettings(), mReportedSensorSize);
+      captureTimestamp, request.getRequestSettings(), mReportedSensorSize);
 
   const std::vector<CaptureRequestBuffer>& buffers = request.getBuffers();
   captureResult.outputBuffers.resize(buffers.size());
@@ -590,7 +499,7 @@ void VirtualCameraRenderThread::processTask(
   }
 
   std::vector<NotifyMsg> notifyMsg{
-      createShutterNotifyMsg(request.getFrameNumber(), timestamp)};
+      createShutterNotifyMsg(request.getFrameNumber(), captureTimestamp)};
   for (const StreamBuffer& resBuffer : captureResult.outputBuffers) {
     if (resBuffer.status != BufferStatus::OK) {
       notifyMsg.push_back(createBufferErrorNotifyMsg(request.getFrameNumber(),
@@ -617,6 +526,51 @@ void VirtualCameraRenderThread::processTask(
   }
 
   ALOGV("%s: Successfully called processCaptureResult", __func__);
+}
+
+std::chrono::nanoseconds VirtualCameraRenderThread::throttleRendering(
+    int maxFps, std::chrono::nanoseconds lastAcquisitionTimestamp,
+    std::chrono::nanoseconds timestamp) {
+  const std::chrono::nanoseconds minFrameDuration(
+      static_cast<uint64_t>(1e9 / maxFps));
+  const std::chrono::nanoseconds frameDuration =
+      timestamp - lastAcquisitionTimestamp;
+  if (frameDuration < minFrameDuration) {
+    // We're too fast for the configured maxFps, let's wait a bit.
+    const std::chrono::nanoseconds sleepTime = minFrameDuration - frameDuration;
+    ALOGV("Current frame duration would  be %" PRIu64
+          " ns corresponding to, "
+          "sleeping for %" PRIu64
+          " ns before updating texture to match maxFps %d",
+          static_cast<uint64_t>(frameDuration.count()),
+          static_cast<uint64_t>(sleepTime.count()), maxFps);
+
+    std::this_thread::sleep_for(sleepTime);
+    timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch());
+    mLastAcquisitionTimestampNanoseconds.store(timestamp.count(),
+                                               std::memory_order_relaxed);
+  }
+  return timestamp;
+}
+
+std::chrono::nanoseconds VirtualCameraRenderThread::getSurfaceTimestamp(
+    std::chrono::nanoseconds timeSinceLastFrame) {
+  std::chrono::nanoseconds surfaceTimestamp = mEglSurfaceTexture->getTimestamp();
+  if (surfaceTimestamp.count() < 0) {
+    uint64_t lastSurfaceTimestamp = mLastSurfaceTimestampNanoseconds.load();
+    if (lastSurfaceTimestamp > 0) {
+      // The timestamps were provided by the producer but we are
+      // repeating the last frame, so we increase the previous timestamp by
+      // the elapsed time sinced its capture, otherwise the camera framework
+      // will discard the frame.
+      surfaceTimestamp = std::chrono::nanoseconds(lastSurfaceTimestamp +
+                                                  timeSinceLastFrame.count());
+    }
+  }
+  mLastSurfaceTimestampNanoseconds.store(surfaceTimestamp.count(),
+                                         std::memory_order_relaxed);
+  return surfaceTimestamp;
 }
 
 void VirtualCameraRenderThread::flushCaptureRequest(
@@ -679,7 +633,7 @@ std::vector<uint8_t> VirtualCameraRenderThread::createThumbnail(
     return {};
   }
 
-  // TODO(b/324383963) Add support for letterboxing if the thumbnail size
+  // TODO(b/324383963) Add support for letterboxing if the thumbnail sizese
   // doesn't correspond
   //  to input texture aspect ratio.
   if (!renderIntoEglFramebuffer(*framebuffer, /*fence=*/nullptr,
@@ -753,6 +707,7 @@ ndk::ScopedAStatus VirtualCameraRenderThread::renderIntoBlobStreamBuffer(
   PlanesLockGuard planesLock(hwBuffer, AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
                              fence);
   if (planesLock.getStatus() != OK) {
+    ALOGE("Failed to lock hwBuffer planes");
     return cameraStatus(Status::INTERNAL_ERROR);
   }
 
@@ -760,23 +715,35 @@ ndk::ScopedAStatus VirtualCameraRenderThread::renderIntoBlobStreamBuffer(
       createExif(Resolution(stream->width, stream->height), resultMetadata,
                  createThumbnail(requestSettings.thumbnailResolution,
                                  requestSettings.thumbnailJpegQuality));
+
+  unsigned long outBufferSize = stream->bufferSize - sizeof(CameraBlob);
+  void* outBuffer = (*planesLock).planes[0].data;
   std::optional<size_t> compressedSize = compressJpeg(
       stream->width, stream->height, requestSettings.jpegQuality,
-      framebuffer->getHardwareBuffer(), app1ExifData,
-      stream->bufferSize - sizeof(CameraBlob), (*planesLock).planes[0].data);
+      framebuffer->getHardwareBuffer(), app1ExifData, outBufferSize, outBuffer);
 
   if (!compressedSize.has_value()) {
     ALOGE("%s: Failed to compress JPEG image", __func__);
     return cameraStatus(Status::INTERNAL_ERROR);
   }
 
+  // Add the transport header at the end of the JPEG output buffer.
+  //
+  // jpegBlobId must start at byte[buffer_size - sizeof(CameraBlob)],
+  // where the buffer_size is the size of gralloc buffer.
+  //
+  // See
+  // hardware/interfaces/camera/device/aidl/android/hardware/camera/device/CameraBlobId.aidl
+  // for the full explanation of the following code.
   CameraBlob cameraBlob{
       .blobId = CameraBlobId::JPEG,
       .blobSizeBytes = static_cast<int32_t>(compressedSize.value())};
 
-  memcpy(reinterpret_cast<uint8_t*>((*planesLock).planes[0].data) +
-             (stream->bufferSize - sizeof(cameraBlob)),
-         &cameraBlob, sizeof(cameraBlob));
+  // Copy the cameraBlob to the end of the JPEG buffer.
+  uint8_t* jpegStreamEndAddress =
+      reinterpret_cast<uint8_t*>((*planesLock).planes[0].data) +
+      (stream->bufferSize - sizeof(cameraBlob));
+  memcpy(jpegStreamEndAddress, &cameraBlob, sizeof(cameraBlob));
 
   ALOGV("%s: Successfully compressed JPEG image, resulting size %zu B",
         __func__, compressedSize.value());

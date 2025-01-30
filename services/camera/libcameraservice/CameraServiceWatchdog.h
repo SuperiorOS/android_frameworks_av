@@ -30,6 +30,7 @@
  */
 #pragma once
 #include <chrono>
+#include <set>
 #include <thread>
 #include <time.h>
 #include <utils/Thread.h>
@@ -57,16 +58,17 @@ struct MonitoredFunction {
 };
 
 public:
-    explicit CameraServiceWatchdog(const std::string &cameraId,
+
+    explicit CameraServiceWatchdog(const std::set<pid_t> &pids, const std::string &cameraId,
             std::shared_ptr<CameraServiceProxyWrapper> cameraServiceProxyWrapper) :
-                    mCameraId(cameraId), mPause(true), mMaxCycles(kMaxCycles),
+                    mProviderPids(pids), mCameraId(cameraId), mPause(true), mMaxCycles(kMaxCycles),
                     mCycleLengthMs(kCycleLengthMs), mEnabled(true),
                     mCameraServiceProxyWrapper(cameraServiceProxyWrapper) {};
 
-    explicit CameraServiceWatchdog (const std::string &cameraId, size_t maxCycles,
-            uint32_t cycleLengthMs, bool enabled,
+    explicit CameraServiceWatchdog (const std::set<pid_t> &pids, const std::string &cameraId,
+            size_t maxCycles, uint32_t cycleLengthMs, bool enabled,
             std::shared_ptr<CameraServiceProxyWrapper> cameraServiceProxyWrapper) :
-                    mCameraId(cameraId), mPause(true), mMaxCycles(maxCycles),
+                    mProviderPids(pids), mCameraId(cameraId), mPause(true), mMaxCycles(maxCycles),
                     mCycleLengthMs(cycleLengthMs), mEnabled(enabled),
                     mCameraServiceProxyWrapper(cameraServiceProxyWrapper) {};
 
@@ -90,7 +92,8 @@ public:
             // Lock for mEnabled
             mEnabledLock.lock();
             sp<CameraServiceWatchdog> tempWatchdog = new CameraServiceWatchdog(
-                    mCameraId, cycles, cycleLength, mEnabled, mCameraServiceProxyWrapper);
+                    mProviderPids, mCameraId, cycles, cycleLength, mEnabled,
+                    mCameraServiceProxyWrapper);
             mEnabledLock.unlock();
 
             status_t status = tempWatchdog->run("CameraServiceWatchdog");
@@ -150,6 +153,7 @@ private:
     Mutex           mWatchdogLock;      // Lock for condition variable
     Mutex           mEnabledLock;       // Lock for enabled status
     Condition       mWatchdogCondition; // Condition variable for stop/start
+    std::set<pid_t> mProviderPids;      // Process ID set of camera providers
     std::string     mCameraId;          // Camera Id the watchdog belongs to
     bool            mPause;             // True if tid map is empty
     uint32_t        mMaxCycles;         // Max cycles

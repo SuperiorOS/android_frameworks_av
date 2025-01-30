@@ -154,13 +154,16 @@ public:
     // resolveCameraId(logicalCameraId, deviceId, devicePolicy) to arrive at the correct
     // cameraId to perform the operation on (in case of contexts
     // associated with virtual devices).
-    virtual binder::Status     getNumberOfCameras(int32_t type, int32_t deviceId,
+    virtual binder::Status     getNumberOfCameras(int32_t type,
+            const AttributionSourceState& clientAttribution,
             int32_t devicePolicy, int32_t* numCameras);
 
     virtual binder::Status     getCameraInfo(int cameraId, int rotationOverride,
-            int32_t deviceId, int32_t devicePolicy, hardware::CameraInfo* cameraInfo) override;
+            const AttributionSourceState& clientAttribution,
+            int32_t devicePolicy, hardware::CameraInfo* cameraInfo) override;
     virtual binder::Status     getCameraCharacteristics(const std::string& cameraId,
-            int targetSdkVersion, int rotationOverride, int32_t deviceId,
+            int targetSdkVersion, int rotationOverride,
+            const AttributionSourceState& clientAttribution,
             int32_t devicePolicy, CameraMetadata* cameraInfo) override;
     virtual binder::Status     getCameraVendorTagDescriptor(
             /*out*/
@@ -170,17 +173,15 @@ public:
             hardware::camera2::params::VendorTagDescriptorCache* cache);
 
     virtual binder::Status     connect(const sp<hardware::ICameraClient>& cameraClient,
-            int32_t cameraId, const std::string& clientPackageName,
-            int32_t clientUid, int clientPid, int targetSdkVersion,
-            int rotationOverride, bool forceSlowJpegMode, int32_t deviceId,
+            int32_t cameraId, int targetSdkVersion, int rotationOverride, bool forceSlowJpegMode,
+            const AttributionSourceState& clientAttribution,
             int32_t devicePolicy, /*out*/ sp<hardware::ICamera>* device) override;
 
     virtual binder::Status     connectDevice(
             const sp<hardware::camera2::ICameraDeviceCallbacks>& cameraCb,
-            const std::string& cameraId,
-            const std::string& clientPackageName, const std::optional<std::string>& clientFeatureId,
-            int32_t clientUid, int scoreOffset, int targetSdkVersion, int rotationOverride,
-            int32_t deviceId, int32_t devicePolicy,
+            const std::string& cameraId, int scoreOffset, int targetSdkVersion,
+            int rotationOverride, const AttributionSourceState& clientAttribution,
+            int32_t devicePolicy,
             /*out*/
             sp<hardware::camera2::ICameraDeviceUser>* device);
 
@@ -196,7 +197,7 @@ public:
 
     virtual binder::Status isConcurrentSessionConfigurationSupported(
         const std::vector<hardware::camera2::utils::CameraIdAndSessionConfiguration>& sessions,
-        int targetSdkVersion, int32_t deviceId, int32_t devicePolicy,
+        int targetSdkVersion, const AttributionSourceState& clientAttribution, int32_t devicePolicy,
         /*out*/bool* supported);
 
     virtual binder::Status    getLegacyParameters(
@@ -205,13 +206,16 @@ public:
             std::string* parameters);
 
     virtual binder::Status    setTorchMode(const std::string& cameraId, bool enabled,
-            const sp<IBinder>& clientBinder, int32_t deviceId, int32_t devicePolicy);
-
-    virtual binder::Status    turnOnTorchWithStrengthLevel(const std::string& cameraId,
-            int32_t torchStrength, const sp<IBinder>& clientBinder, int32_t deviceId,
+            const sp<IBinder>& clientBinder, const AttributionSourceState& clientAttribution,
             int32_t devicePolicy);
 
-    virtual binder::Status    getTorchStrengthLevel(const std::string& cameraId, int32_t deviceId,
+    virtual binder::Status    turnOnTorchWithStrengthLevel(const std::string& cameraId,
+            int32_t torchStrength, const sp<IBinder>& clientBinder,
+            const AttributionSourceState& clientAttribution,
+            int32_t devicePolicy);
+
+    virtual binder::Status    getTorchStrengthLevel(const std::string& cameraId,
+            const AttributionSourceState& clientAttribution,
             int32_t devicePolicy, int32_t* torchStrength);
 
     virtual binder::Status    notifySystemEvent(int32_t eventId,
@@ -247,19 +251,20 @@ public:
             const hardware::camera2::impl::CameraMetadataNative& sessionParams);
 
     virtual binder::Status createDefaultRequest(const std::string& cameraId, int templateId,
-            int32_t deviceId, int32_t devicePolicy,
+            const AttributionSourceState& clientAttribution, int32_t devicePolicy,
             /*out*/
             hardware::camera2::impl::CameraMetadataNative* request);
 
     virtual binder::Status isSessionConfigurationWithParametersSupported(
             const std::string& cameraId, int targetSdkVersion,
             const SessionConfiguration& sessionConfiguration,
-            int32_t deviceId, int32_t devicePolicy,
+            const AttributionSourceState& clientAttribution, int32_t devicePolicy,
             /*out*/ bool* supported);
 
     virtual binder::Status getSessionCharacteristics(
             const std::string& cameraId, int targetSdkVersion, int rotationOverride,
-            const SessionConfiguration& sessionConfiguration, int32_t deviceId,
+            const SessionConfiguration& sessionConfiguration,
+            const AttributionSourceState& clientAttribution,
             int32_t devicePolicy, /*out*/ CameraMetadata* outMetadata);
 
     // Extra permissions checks
@@ -942,17 +947,19 @@ private:
     void removeStates(const std::string& id);
 
     // Check if we can connect, before we acquire the service lock.
-    // The returned originalClientPid is the PID of the original process that wants to connect to
-    // camera.
-    // The returned clientPid is the PID of the client that directly connects to camera.
-    // originalClientPid and clientPid are usually the same except when the application uses
-    // mediaserver to connect to camera (using MediaRecorder to connect to camera). In that case,
-    // clientPid is the PID of mediaserver and originalClientPid is the PID of the application.
+    // If clientPid/clientUid are USE_CALLING_PID/USE_CALLING_UID, they will be overwritten with
+    // the calling pid/uid.
     binder::Status validateConnectLocked(const std::string& cameraId, const std::string& clientName,
-            /*inout*/int& clientUid, /*inout*/int& clientPid, /*out*/int& originalClientPid) const;
+            int clientUid, int clientPid) const;
     binder::Status validateClientPermissionsLocked(const std::string& cameraId,
-            const std::string& clientName, /*inout*/int& clientUid, /*inout*/int& clientPid,
-            /*out*/int& originalClientPid) const;
+            const std::string& clientName, int clientUid, int clientPid) const;
+
+    // If clientPackageNameMaybe is empty, attempts to resolve the package name.
+    std::string resolvePackageName(int clientUid, const std::string& clientPackageNameMaybe) const;
+    void logConnectionAttempt(int clientPid, const std::string& clientPackageName,
+        const std::string& cameraId, apiLevel effectiveApiLevel) const;
+    binder::Status errorNotTrusted(int clientPid, int clientUid, const std::string& cameraId,
+            const std::string& clientName, bool isPid) const;
 
     bool isCameraPrivacyEnabled(const String16& packageName,const std::string& cameraId,
            int clientPid, int ClientUid);
@@ -997,16 +1004,16 @@ private:
     // as for legacy apps we will toggle the app op for all packages in the UID.
     // The caveat is that the operation may be attributed to the wrong package and
     // stats based on app ops may be slightly off.
-    std::string getPackageNameFromUid(int clientUid);
+    std::string getPackageNameFromUid(int clientUid) const;
 
     // Single implementation shared between the various connect calls
     template<class CALLBACK, class CLIENT>
     binder::Status connectHelper(const sp<CALLBACK>& cameraCb, const std::string& cameraId,
-            int api1CameraId, const std::string& clientPackageNameMaybe, bool systemNativeClient,
+            int api1CameraId, const std::string& clientPackageName, bool systemNativeClient,
             const std::optional<std::string>& clientFeatureId, int clientUid, int clientPid,
             apiLevel effectiveApiLevel, bool shimUpdateOnly, int scoreOffset, int targetSdkVersion,
             int rotationOverride, bool forceSlowJpegMode,
-            const std::string& originalCameraId,
+            const std::string& originalCameraId, bool isNonSystemNdk,
             /*out*/sp<CLIENT>& device);
 
     // Lock guarding camera service state

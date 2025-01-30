@@ -179,7 +179,7 @@ protected:
 // the attached track(s) to accumulate their auxiliary channel.
 class EffectModule : public IAfEffectModule, public EffectBase {
 public:
-    EffectModule(const sp<EffectCallbackInterface>& callabck,
+    EffectModule(const sp<EffectCallbackInterface>& callback,
                     effect_descriptor_t *desc,
                     int id,
                     audio_session_t sessionId,
@@ -228,7 +228,7 @@ public:
             REQUIRES(audio_utils::EffectChain_Mutex) EXCLUDES_EffectBase_Mutex;
     bool isOffloaded_l() const final
             REQUIRES(audio_utils::EffectChain_Mutex) EXCLUDES_EffectBase_Mutex;
-    void addEffectToHal_l() final REQUIRES(audio_utils::EffectChain_Mutex);
+    void addEffectToHal_l() override REQUIRES(audio_utils::EffectChain_Mutex);
     void release_l(const std::string& from = "") final REQUIRES(audio_utils::EffectChain_Mutex);
 
     sp<IAfEffectModule> asEffectModule() final { return this; }
@@ -250,6 +250,9 @@ public:
 
     void dump(int fd, const Vector<String16>& args) const final;
 
+protected:
+    sp<EffectHalInterface> mEffectInterface; // Effect module HAL
+
 private:
 
     // Maximum time allocated to effect engines to complete the turn off sequence
@@ -259,18 +262,18 @@ private:
 
     status_t start_ll() REQUIRES(audio_utils::EffectChain_Mutex, audio_utils::EffectBase_Mutex);
     status_t stop_ll() REQUIRES(audio_utils::EffectChain_Mutex, audio_utils::EffectBase_Mutex);
-    status_t removeEffectFromHal_l() REQUIRES(audio_utils::EffectChain_Mutex);
+    status_t removeEffectFromHal_l() override REQUIRES(audio_utils::EffectChain_Mutex);
     status_t sendSetAudioDevicesCommand(const AudioDeviceTypeAddrVector &devices, uint32_t cmdCode);
     effect_buffer_access_e requiredEffectBufferAccessMode() const {
         return mConfig.inputCfg.buffer.raw == mConfig.outputCfg.buffer.raw
                 ? EFFECT_BUFFER_ACCESS_WRITE : EFFECT_BUFFER_ACCESS_ACCUMULATE;
     }
 
-    status_t setVolumeInternal(uint32_t* left, uint32_t* right,
-                               bool controller /* the volume controller effect of the chain */);
+    status_t setVolumeInternal_ll(uint32_t* left, uint32_t* right,
+                                  bool controller /* the volume controller effect of the chain */)
+            REQUIRES(audio_utils::EffectChain_Mutex, audio_utils::EffectBase_Mutex);
 
     effect_config_t     mConfig;    // input and output audio configuration
-    sp<EffectHalInterface> mEffectInterface; // Effect module HAL
     sp<EffectBufferHalInterface> mInBuffer;  // Buffers for interacting with HAL
     sp<EffectBufferHalInterface> mOutBuffer;
     status_t            mStatus;    // initialization status
@@ -292,12 +295,12 @@ private:
     template <typename MUTEX>
     class AutoLockReentrant {
     public:
-        AutoLockReentrant(MUTEX& mutex, pid_t allowedTid)
+        AutoLockReentrant(MUTEX& mutex, pid_t allowedTid) ACQUIRE(audio_utils::EffectBase_Mutex)
             : mMutex(gettid() == allowedTid ? nullptr : &mutex)
         {
             if (mMutex != nullptr) mMutex->lock();
         }
-        ~AutoLockReentrant() {
+        ~AutoLockReentrant() RELEASE(audio_utils::EffectBase_Mutex) {
             if (mMutex != nullptr) mMutex->unlock();
         }
     private:
@@ -314,7 +317,19 @@ private:
     // here is used to indicate the volume to apply before this effect.
     std::optional<std::vector<uint32_t>> mReturnedVolume;
     // TODO: b/315995877, remove this debugging string after root cause
-    std::string mEffectInterfaceDebug;
+    std::string mEffectInterfaceDebug GUARDED_BY(audio_utils::EffectChain_Mutex);
+};
+
+class HwAccDeviceEffectModule : public EffectModule {
+public:
+    HwAccDeviceEffectModule(const sp<EffectCallbackInterface>& callback, effect_descriptor_t *desc,
+            int id, audio_port_handle_t deviceId) :
+        EffectModule(callback, desc, id, AUDIO_SESSION_DEVICE, /* pinned */ false, deviceId) {}
+    void addEffectToHal_l() final REQUIRES(audio_utils::EffectChain_Mutex);
+
+private:
+    status_t removeEffectFromHal_l() final REQUIRES(audio_utils::EffectChain_Mutex);
+    bool mAddedToHal = false;
 };
 
 // The EffectHandle class implements the IEffect interface. It provides resources
@@ -329,7 +344,8 @@ public:
     EffectHandle(const sp<IAfEffectBase>& effect,
             const sp<Client>& client,
             const sp<media::IEffectClient>& effectClient,
-            int32_t priority, bool notifyFramesProcessed);
+            int32_t priority, bool notifyFramesProcessed, bool isInternal = false,
+            audio_utils::MutexOrder mutexOrder = audio_utils::MutexOrder::kEffectHandle_Mutex);
     ~EffectHandle() override;
     status_t onTransact(
             uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags) final;
@@ -349,6 +365,11 @@ public:
                                       int32_t* _aidl_return) final;
 
     const sp<Client>& client() const final { return mClient; }
+    /**
+     * Checks if the handle is internal, aka created by AudioFlinger for internal needs (e.g.
+     * device effect HAL handle or device effect thread handle).
+     */
+    virtual bool isInternal() const { return mIsInternal; }
 
     sp<android::media::IEffect> asIEffect() final {
         return sp<android::media::IEffect>::fromExisting(this);
@@ -386,15 +407,18 @@ private:
 
     void dumpToBuffer(char* buffer, size_t size) const final;
 
+protected:
+    // protects IEffect method calls
+    mutable audio_utils::mutex mMutex;
 
 private:
     DISALLOW_COPY_AND_ASSIGN(EffectHandle);
 
-    audio_utils::mutex& mutex() const RETURN_CAPABILITY(android::audio_utils::EffectHandle_Mutex) {
+    virtual audio_utils::mutex& mutex() const
+            RETURN_CAPABILITY(android::audio_utils::EffectHandle_Mutex) {
         return mMutex;
     }
-    // protects IEffect method calls
-    mutable audio_utils::mutex mMutex{audio_utils::MutexOrder::kEffectHandle_Mutex};
+
     const wp<IAfEffectBase> mEffect;               // pointer to controlled EffectModule
     const sp<media::IEffectClient> mEffectClient;  // callback interface for client notifications
     /*const*/ sp<Client> mClient;            // client for shared memory allocation, see
@@ -410,6 +434,28 @@ private:
     bool mDisconnected;                      // Set to true by disconnect()
     const bool mNotifyFramesProcessed;       // true if the client callback event
                                              // EVENT_FRAMES_PROCESSED must be generated
+    const bool mIsInternal;
+};
+
+/**
+ * There are 2 types of effects:
+ * -Session Effect: handle is directly called from the client, without AudioFlinger lock.
+ * -Device Effect: a device effect proxy is aggregating a collection of internal effect handles that
+ * controls the same effect added on all audio patches involving the device effect selected port
+ * requested either by a client or by AudioPolicyEffects. These internal effect handles do not have
+ * client. Sequence flow implies a different locking order, hence the lock is specialied.
+ */
+class InternalEffectHandle : public EffectHandle {
+public:
+    InternalEffectHandle(const sp<IAfEffectBase>& effect, bool notifyFramesProcessed) :
+            EffectHandle(effect, /* client= */ nullptr, /* effectClient= */ nullptr,
+                         /* priority= */ 0, notifyFramesProcessed, /* isInternal */ true,
+                         audio_utils::MutexOrder::kDeviceEffectHandle_Mutex) {}
+
+    virtual audio_utils::mutex& mutex() const
+            RETURN_CAPABILITY(android::audio_utils::DeviceEffectHandle_Mutex) {
+        return mMutex;
+    }
 };
 
 // the EffectChain class represents a group of effects associated to one audio session.
@@ -713,7 +759,7 @@ public:
              uint32_t mRightVolume;      // previous volume on right channel
              uint32_t mNewLeftVolume;       // new volume on left channel
              uint32_t mNewRightVolume;      // new volume on right channel
-             product_strategy_t mStrategy; // strategy for this effect chain
+             product_strategy_t mStrategy = PRODUCT_STRATEGY_NONE; // strategy for this effect chain
              // mSuspendedEffects lists all effects currently suspended in the chain.
              // Use effect type UUID timelow field as key. There is no real risk of identical
              // timeLow fields among effect type UUIDs.
@@ -747,7 +793,7 @@ public:
     status_t onUpdatePatch(audio_patch_handle_t oldPatchHandle, audio_patch_handle_t newPatchHandle,
            const IAfPatchPanel::Patch& patch) final;
 
-    void onReleasePatch(audio_patch_handle_t patchHandle) final;
+    sp<IAfEffectHandle> onReleasePatch(audio_patch_handle_t patchHandle) final;
 
     size_t removeEffect(const sp<IAfEffectModule>& effect) final;
 
@@ -796,7 +842,10 @@ private:
         audio_channel_mask_t outChannelMask() const override;
         uint32_t outChannelCount() const override;
         audio_channel_mask_t hapticChannelMask() const override { return AUDIO_CHANNEL_NONE; }
-        size_t frameCount() const override  { return 0; }
+        /**
+         * frameCount cannot be zero.
+         */
+        size_t frameCount() const override  { return 1; }
         uint32_t latency() const override  { return 0; }
 
         status_t addEffectToHal(const sp<EffectHalInterface>& effect) override;
@@ -808,7 +857,7 @@ private:
         void checkSuspendOnEffectEnabled(const sp<IAfEffectBase>& effect __unused,
                               bool enabled __unused, bool threadLocked __unused) override {}
         void resetVolume_l() override REQUIRES(audio_utils::EffectChain_Mutex) {}
-        product_strategy_t strategy() const override  { return static_cast<product_strategy_t>(0); }
+        product_strategy_t strategy() const override  { return PRODUCT_STRATEGY_NONE; }
         int32_t activeTrackCnt() const override { return 0; }
         void onEffectEnable(const sp<IAfEffectBase>& effect __unused) override;
         void onEffectDisable(const sp<IAfEffectBase>& effect __unused) override;

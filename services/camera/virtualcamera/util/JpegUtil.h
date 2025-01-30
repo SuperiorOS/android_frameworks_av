@@ -18,6 +18,7 @@
 #define ANDROID_COMPANION_VIRTUALCAMERA_JPEGUTIL_H
 
 #include <optional>
+#include <vector>
 
 #include "android/hardware_buffer.h"
 #include "util/Util.h"

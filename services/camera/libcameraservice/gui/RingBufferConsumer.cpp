@@ -18,12 +18,14 @@
 #define LOG_TAG "RingBufferConsumer"
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 
+#include <com_android_graphics_libgui_flags.h>
 #include <inttypes.h>
 
 #include <utils/Log.h>
 
-#include <gui/RingBufferConsumer.h>
 #include <camera/StringUtils.h>
+#include <com_android_graphics_libgui_flags.h>
+#include <gui/RingBufferConsumer.h>
 
 #define BI_LOGV(x, ...) ALOGV("[%s] " x, mName.c_str(), ##__VA_ARGS__)
 #define BI_LOGD(x, ...) ALOGD("[%s] " x, mName.c_str(), ##__VA_ARGS__)
@@ -38,13 +40,14 @@ typedef android::RingBufferConsumer::PinnedBufferItem PinnedBufferItem;
 
 namespace android {
 
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+RingBufferConsumer::RingBufferConsumer(uint64_t consumerUsage, int bufferCount)
+    : ConsumerBase(), mBufferCount(bufferCount), mLatestTimestamp(0) {
+#else
 RingBufferConsumer::RingBufferConsumer(const sp<IGraphicBufferConsumer>& consumer,
-        uint64_t consumerUsage,
-        int bufferCount) :
-    ConsumerBase(consumer),
-    mBufferCount(bufferCount),
-    mLatestTimestamp(0)
-{
+                                       uint64_t consumerUsage, int bufferCount)
+    : ConsumerBase(consumer), mBufferCount(bufferCount), mLatestTimestamp(0) {
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
     mConsumer->setConsumerUsageBits(consumerUsage);
     mConsumer->setMaxAcquiredBufferCount(bufferCount);
 
@@ -317,7 +320,9 @@ void RingBufferConsumer::onFrameAvailable(const BufferItem& item) {
 
         mLatestTimestamp = item.mTimestamp;
 
+#if !COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_RING_BUFFER)
         item.mGraphicBuffer = mSlots[item.mSlot].mGraphicBuffer;
+#endif
     } // end of mMutex lock
 
     ConsumerBase::onFrameAvailable(item);

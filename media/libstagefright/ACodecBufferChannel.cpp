@@ -50,7 +50,7 @@ using namespace hardware::cas::V1_0;
 using namespace hardware::cas::native::V1_0;
 using DrmBufferType = hardware::drm::V1_0::BufferType;
 using BufferInfo = ACodecBufferChannel::BufferInfo;
-using BufferInfoIterator = std::vector<const BufferInfo>::const_iterator;
+using BufferInfoIterator = std::vector<BufferInfo>::const_iterator;
 
 ACodecBufferChannel::~ACodecBufferChannel() {
     if (mCrypto != nullptr && mDealer != nullptr && mHeapSeqNum >= 0) {
@@ -59,7 +59,7 @@ ACodecBufferChannel::~ACodecBufferChannel() {
 }
 
 static BufferInfoIterator findClientBuffer(
-        const std::shared_ptr<const std::vector<const BufferInfo>> &array,
+        const std::shared_ptr<const std::vector<BufferInfo>> &array,
         const sp<MediaCodecBuffer> &buffer) {
     return std::find_if(
             array->begin(), array->end(),
@@ -67,7 +67,7 @@ static BufferInfoIterator findClientBuffer(
 }
 
 static BufferInfoIterator findBufferId(
-        const std::shared_ptr<const std::vector<const BufferInfo>> &array,
+        const std::shared_ptr<const std::vector<BufferInfo>> &array,
         IOMX::buffer_id bufferId) {
     return std::find_if(
             array->begin(), array->end(),
@@ -97,7 +97,7 @@ ACodecBufferChannel::ACodecBufferChannel(
 }
 
 status_t ACodecBufferChannel::queueInputBuffer(const sp<MediaCodecBuffer> &buffer) {
-    std::shared_ptr<const std::vector<const BufferInfo>> array(
+    std::shared_ptr<const std::vector<BufferInfo>> array(
             std::atomic_load(&mInputBuffers));
     BufferInfoIterator it = findClientBuffer(array, buffer);
     if (it == array->end()) {
@@ -138,7 +138,7 @@ status_t ACodecBufferChannel::queueSecureInputBuffer(
     if (!hasCryptoOrDescrambler() || mDealer == nullptr) {
         return -ENOSYS;
     }
-    std::shared_ptr<const std::vector<const BufferInfo>> array(
+    std::shared_ptr<const std::vector<BufferInfo>> array(
             std::atomic_load(&mInputBuffers));
     BufferInfoIterator it = findClientBuffer(array, buffer);
     if (it == array->end()) {
@@ -352,7 +352,7 @@ status_t ACodecBufferChannel::attachEncryptedBuffer(
         size_t numSubSamples,
         const sp<MediaCodecBuffer> &buffer,
         AString* errorDetailMsg) {
-    std::shared_ptr<const std::vector<const BufferInfo>> array(
+    std::shared_ptr<const std::vector<BufferInfo>> array(
             std::atomic_load(&mInputBuffers));
     BufferInfoIterator it = findClientBuffer(array, buffer);
     if (it == array->end()) {
@@ -473,7 +473,7 @@ status_t ACodecBufferChannel::attachEncryptedBuffer(
 
 status_t ACodecBufferChannel::renderOutputBuffer(
         const sp<MediaCodecBuffer> &buffer, int64_t timestampNs) {
-    std::shared_ptr<const std::vector<const BufferInfo>> array(
+    std::shared_ptr<const std::vector<BufferInfo>> array(
             std::atomic_load(&mOutputBuffers));
     BufferInfoIterator it = findClientBuffer(array, buffer);
     if (it == array->end()) {
@@ -495,7 +495,7 @@ void ACodecBufferChannel::pollForRenderedBuffers() {
 }
 
 status_t ACodecBufferChannel::discardBuffer(const sp<MediaCodecBuffer> &buffer) {
-    std::shared_ptr<const std::vector<const BufferInfo>> array(
+    std::shared_ptr<const std::vector<BufferInfo>> array(
             std::atomic_load(&mInputBuffers));
     bool input = true;
     BufferInfoIterator it = findClientBuffer(array, buffer);
@@ -517,7 +517,7 @@ status_t ACodecBufferChannel::discardBuffer(const sp<MediaCodecBuffer> &buffer) 
 }
 
 void ACodecBufferChannel::getInputBufferArray(Vector<sp<MediaCodecBuffer>> *array) {
-    std::shared_ptr<const std::vector<const BufferInfo>> inputBuffers(
+    std::shared_ptr<const std::vector<BufferInfo>> inputBuffers(
             std::atomic_load(&mInputBuffers));
     array->clear();
     for (const BufferInfo &elem : *inputBuffers) {
@@ -526,7 +526,7 @@ void ACodecBufferChannel::getInputBufferArray(Vector<sp<MediaCodecBuffer>> *arra
 }
 
 void ACodecBufferChannel::getOutputBufferArray(Vector<sp<MediaCodecBuffer>> *array) {
-    std::shared_ptr<const std::vector<const BufferInfo>> outputBuffers(
+    std::shared_ptr<const std::vector<BufferInfo>> outputBuffers(
             std::atomic_load(&mOutputBuffers));
     array->clear();
     for (const BufferInfo &elem : *outputBuffers) {
@@ -583,7 +583,7 @@ void ACodecBufferChannel::setInputBufferArray(const std::vector<BufferAndId> &ar
             mDecryptDestination = mDealer->allocate(destinationBufferSize);
         }
     }
-    std::vector<const BufferInfo> inputBuffers;
+    std::vector<BufferInfo> inputBuffers;
     for (const BufferAndId &elem : array) {
         sp<IMemory> sharedEncryptedBuffer;
         if (hasCryptoOrDescrambler()) {
@@ -593,22 +593,22 @@ void ACodecBufferChannel::setInputBufferArray(const std::vector<BufferAndId> &ar
     }
     std::atomic_store(
             &mInputBuffers,
-            std::make_shared<const std::vector<const BufferInfo>>(inputBuffers));
+            std::make_shared<const std::vector<BufferInfo>>(inputBuffers));
 }
 
 void ACodecBufferChannel::setOutputBufferArray(const std::vector<BufferAndId> &array) {
-    std::vector<const BufferInfo> outputBuffers;
+    std::vector<BufferInfo> outputBuffers;
     for (const BufferAndId &elem : array) {
         outputBuffers.emplace_back(elem.mBuffer, elem.mBufferId, nullptr);
     }
     std::atomic_store(
             &mOutputBuffers,
-            std::make_shared<const std::vector<const BufferInfo>>(outputBuffers));
+            std::make_shared<const std::vector<BufferInfo>>(outputBuffers));
 }
 
 void ACodecBufferChannel::fillThisBuffer(IOMX::buffer_id bufferId) {
     ALOGV("fillThisBuffer #%d", bufferId);
-    std::shared_ptr<const std::vector<const BufferInfo>> array(
+    std::shared_ptr<const std::vector<BufferInfo>> array(
             std::atomic_load(&mInputBuffers));
     BufferInfoIterator it = findBufferId(array, bufferId);
 
@@ -629,7 +629,7 @@ void ACodecBufferChannel::drainThisBuffer(
         IOMX::buffer_id bufferId,
         OMX_U32 omxFlags) {
     ALOGV("drainThisBuffer #%d", bufferId);
-    std::shared_ptr<const std::vector<const BufferInfo>> array(
+    std::shared_ptr<const std::vector<BufferInfo>> array(
             std::atomic_load(&mOutputBuffers));
     BufferInfoIterator it = findBufferId(array, bufferId);
 

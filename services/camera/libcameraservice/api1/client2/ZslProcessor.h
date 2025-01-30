@@ -24,8 +24,9 @@
 #include <utils/Condition.h>
 #include <gui/BufferItem.h>
 #include <gui/BufferItemConsumer.h>
-#include <gui/RingBufferConsumer.h>
+#include <gui/Flags.h>
 #include <gui/IProducerListener.h>
+#include <gui/RingBufferConsumer.h>
 #include <camera/CameraMetadata.h>
 
 #include "api1/client2/FrameProcessor.h"
@@ -83,6 +84,20 @@ class ZslProcessor :
 
   private:
 
+#if WB_CAMERA3_AND_PROCESSORS_WITH_DEPENDENCIES
+    class InputProducerListener : public SurfaceListener {
+    public:
+        InputProducerListener(wp<ZslProcessor> parent) : mParent(parent) {}
+        virtual void onBufferReleased() override;
+        virtual void onBuffersDiscarded(const std::vector<sp<GraphicBuffer>>& /* buffers */)
+            override {}
+        virtual void onBufferDetached(int /* slot */) override {}
+        virtual bool needsReleaseNotify() override { return true; }
+
+    private:
+        wp<ZslProcessor> mParent;
+    };
+#else
     class InputProducerListener : public BnProducerListener {
     public:
         InputProducerListener(wp<ZslProcessor> parent) : mParent(parent) {}
@@ -92,6 +107,7 @@ class ZslProcessor :
     private:
         wp<ZslProcessor> mParent;
     };
+#endif
 
     static const nsecs_t kWaitDuration = 10000000; // 10 ms
     nsecs_t mLatestClearedBufferTimestamp;
@@ -139,8 +155,13 @@ class ZslProcessor :
     // Input buffer queued into HAL
     sp<RingBufferConsumer::PinnedBufferItem> mInputBuffer;
     sp<RingBufferConsumer>                   mProducer;
+
+#if WB_CAMERA3_AND_PROCESSORS_WITH_DEPENDENCIES
+    sp<Surface>                              mInputSurface;
+#else
     sp<IGraphicBufferProducer>               mInputProducer;
     int                                      mInputProducerSlot;
+#endif
 
     Condition                                mBuffersToDetachSignal;
     int                                      mBuffersToDetach;

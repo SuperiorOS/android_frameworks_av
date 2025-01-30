@@ -104,7 +104,7 @@ void Camera3IOStreamBase::dump(int fd, [[maybe_unused]] const Vector<String16> &
     lines << fmt::sprintf("      Total buffers: %zu, currently dequeued: %zu, "
             "currently cached: %zu\n", mTotalBufferCount, mHandoutTotalBufferCount,
             mCachedOutputBufferCount);
-    std::string linesStr = std::move(lines.str());
+    std::string linesStr = lines.str();
     write(fd, linesStr.c_str(), linesStr.size());
 
     Camera3Stream::dump(fd, args);

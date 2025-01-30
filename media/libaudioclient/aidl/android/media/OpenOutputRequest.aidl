@@ -19,6 +19,7 @@ package android.media;
 import android.media.AudioPortFw;
 import android.media.audio.common.AudioConfig;
 import android.media.audio.common.AudioConfigBase;
+import android.media.audio.common.AudioAttributes;
 
 /**
  * {@hide}
@@ -32,4 +33,5 @@ parcelable OpenOutputRequest {
     AudioPortFw device;
     /** Bitmask, indexed by AudioOutputFlag. */
     int flags;
+    AudioAttributes attributes;
 }

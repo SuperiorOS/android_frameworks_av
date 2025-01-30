@@ -585,7 +585,7 @@ status_t AudioMixer::postCreateTrack(TrackBase *track)
     t->mPlaybackRate = AUDIO_PLAYBACK_RATE_DEFAULT;
     // haptic
     t->mHapticPlaybackEnabled = false;
-    t->mHapticScale = {/*level=*/os::HapticLevel::NONE };
+    t->mHapticScale = os::HapticScale::none();
     t->mHapticMaxAmplitude = NAN;
     t->mMixerHapticChannelMask = AUDIO_CHANNEL_NONE;
     t->mMixerHapticChannelCount = 0;

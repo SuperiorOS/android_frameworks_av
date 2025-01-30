@@ -43,7 +43,8 @@ public:
             audio_io_handle_t handle,
             audio_devices_t devices,
             struct audio_config *config,
-            const char *address) override;
+            const char *address,
+            const std::vector<playback_track_metadata_v7_t>& sourceMetadata) override;
 
     /**
     * Write audio buffer to driver. Returns number of bytes written, or a

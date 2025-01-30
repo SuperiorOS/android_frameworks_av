@@ -64,5 +64,6 @@ cc_library_static {
     ],
     defaults: [
         "aconfig_lib_cc_static_link.defaults",
+        "latest_android_media_audio_common_types_cpp_static",
     ],
 }

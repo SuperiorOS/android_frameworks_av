@@ -28,8 +28,6 @@
 #include <android/media/AudioMixRouteFlag.h>
 #include <android/media/AudioMixType.h>
 #include <android/media/AudioOffloadMode.h>
-#include <android/media/AudioPolicyForceUse.h>
-#include <android/media/AudioPolicyForcedConfig.h>
 #include <android/media/DeviceRole.h>
 
 #include <media/AidlConversionUtil.h>
@@ -83,16 +81,6 @@ ConversionResult<audio_policy_dev_state_t>
 aidl2legacy_AudioPolicyDeviceState_audio_policy_dev_state_t(media::AudioPolicyDeviceState aidl);
 ConversionResult<media::AudioPolicyDeviceState>
 legacy2aidl_audio_policy_dev_state_t_AudioPolicyDeviceState(audio_policy_dev_state_t legacy);
-
-ConversionResult<audio_policy_force_use_t>
-aidl2legacy_AudioPolicyForceUse_audio_policy_force_use_t(media::AudioPolicyForceUse aidl);
-ConversionResult<media::AudioPolicyForceUse>
-legacy2aidl_audio_policy_force_use_t_AudioPolicyForceUse(audio_policy_force_use_t legacy);
-
-ConversionResult<audio_policy_forced_cfg_t>
-aidl2legacy_AudioPolicyForcedConfig_audio_policy_forced_cfg_t(media::AudioPolicyForcedConfig aidl);
-ConversionResult<media::AudioPolicyForcedConfig>
-legacy2aidl_audio_policy_forced_cfg_t_AudioPolicyForcedConfig(audio_policy_forced_cfg_t legacy);
 
 ConversionResult<device_role_t>
 aidl2legacy_DeviceRole_device_role_t(media::DeviceRole aidl);

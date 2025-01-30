@@ -36,10 +36,10 @@ cc_library_shared {
         "libbase_headers",
     ],
     static_libs: [
+        "libaudiopolicycapengine_config",
         "libaudiopolicyengine_common",
         "libaudiopolicyengine_config",
         "libaudiopolicyengineconfigurable_pfwwrapper",
-
     ],
     shared_libs: [
         "libaudio_aidl_conversion_common_cpp",
@@ -56,5 +56,13 @@ cc_library_shared {
     ],
     defaults: [
         "aconfig_lib_cc_static_link.defaults",
+        "latest_android_media_audio_common_types_cpp_shared",
+    ],
+    required: [
+        "CapClass.xml",
+        "CapProductStrategies.xml",
+        "CapSubsystem-CommonTypes.xml",
+        "CapSubsystem.xml",
+        "ParameterFrameworkConfigurationCap.xml",
     ],
 }

@@ -60,6 +60,15 @@ flag {
 }
 
 flag {
+    name: "equal_sco_lea_vc_index_range"
+    namespace: "media_audio"
+    description:
+        "Introduce the same index range for voice calls over SCO and "
+        "LE audio"
+    bug: "364364777"
+}
+
+flag {
     name: "music_fx_edge_to_edge"
     namespace: "media_audio"
     description: "Enable Edge-to-edge feature for MusicFx and handle insets"
@@ -80,6 +89,14 @@ flag {
     description:
         "Replace internally STREAM_BLUETOOTH_SCO with STREAM_VOICE_CALL"
     bug: "345024266"
+}
+
+flag {
+    name: "ring_my_car"
+    namespace: "media_audio"
+    description:
+        "Incoming ringtones will not be muted based on ringer mode when connected to a car"
+    bug: "319515324"
 }
 
 flag {

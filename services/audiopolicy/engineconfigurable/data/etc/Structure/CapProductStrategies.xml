@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (C) 2024 The Android Open Source Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+-->
+<ComponentTypeSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xmlns:xi="http://www.w3.org/2001/XInclude"
+              xsi:noNamespaceSchemaLocation="Schemas/ComponentTypeSet.xsd">
+  <!-- This structure is expected to be in the system partition and provisionned a maximum
+       allowed strategies to be used by vendor. -->
+  <ComponentType Name="ProductStrategies" Description="">
+    <Component Name="vx_1000" Type="ProductStrategy" Mapping="Identifier:1000,Name:vx_1000"/>
+    <Component Name="vx_1001" Type="ProductStrategy" Mapping="Identifier:1001,Name:vx_1001"/>
+    <Component Name="vx_1002" Type="ProductStrategy" Mapping="Identifier:1002,Name:vx_1002"/>
+    <Component Name="vx_1003" Type="ProductStrategy" Mapping="Identifier:1003,Name:vx_1003"/>
+    <Component Name="vx_1004" Type="ProductStrategy" Mapping="Identifier:1004,Name:vx_1004"/>
+    <Component Name="vx_1005" Type="ProductStrategy" Mapping="Identifier:1005,Name:vx_1005"/>
+    <Component Name="vx_1006" Type="ProductStrategy" Mapping="Identifier:1006,Name:vx_1006"/>
+    <Component Name="vx_1007" Type="ProductStrategy" Mapping="Identifier:1007,Name:vx_1007"/>
+    <Component Name="vx_1008" Type="ProductStrategy" Mapping="Identifier:1008,Name:vx_1008"/>
+    <Component Name="vx_1009" Type="ProductStrategy" Mapping="Identifier:1009,Name:vx_1009"/>
+    <Component Name="vx_1010" Type="ProductStrategy" Mapping="Identifier:1010,Name:vx_1010"/>
+    <Component Name="vx_1011" Type="ProductStrategy" Mapping="Identifier:1011,Name:vx_1011"/>
+    <Component Name="vx_1012" Type="ProductStrategy" Mapping="Identifier:1012,Name:vx_1012"/>
+    <Component Name="vx_1013" Type="ProductStrategy" Mapping="Identifier:1013,Name:vx_1013"/>
+    <Component Name="vx_1014" Type="ProductStrategy" Mapping="Identifier:1014,Name:vx_1014"/>
+    <Component Name="vx_1015" Type="ProductStrategy" Mapping="Identifier:1015,Name:vx_1015"/>
+    <Component Name="vx_1016" Type="ProductStrategy" Mapping="Identifier:1016,Name:vx_1016"/>
+    <Component Name="vx_1017" Type="ProductStrategy" Mapping="Identifier:1017,Name:vx_1017"/>
+    <Component Name="vx_1018" Type="ProductStrategy" Mapping="Identifier:1018,Name:vx_1018"/>
+    <Component Name="vx_1019" Type="ProductStrategy" Mapping="Identifier:1019,Name:vx_1019"/>
+    <Component Name="vx_1020" Type="ProductStrategy" Mapping="Identifier:1020,Name:vx_1020"/>
+    <Component Name="vx_1021" Type="ProductStrategy" Mapping="Identifier:1021,Name:vx_1021"/>
+    <Component Name="vx_1022" Type="ProductStrategy" Mapping="Identifier:1022,Name:vx_1022"/>
+    <Component Name="vx_1023" Type="ProductStrategy" Mapping="Identifier:1023,Name:vx_1023"/>
+    <Component Name="vx_1024" Type="ProductStrategy" Mapping="Identifier:1024,Name:vx_1024"/>
+    <Component Name="vx_1025" Type="ProductStrategy" Mapping="Identifier:1025,Name:vx_1025"/>
+    <Component Name="vx_1026" Type="ProductStrategy" Mapping="Identifier:1026,Name:vx_1026"/>
+    <Component Name="vx_1027" Type="ProductStrategy" Mapping="Identifier:1027,Name:vx_1027"/>
+    <Component Name="vx_1028" Type="ProductStrategy" Mapping="Identifier:1028,Name:vx_1028"/>
+    <Component Name="vx_1029" Type="ProductStrategy" Mapping="Identifier:1029,Name:vx_1029"/>
+    <Component Name="vx_1030" Type="ProductStrategy" Mapping="Identifier:1030,Name:vx_1030"/>
+    <Component Name="vx_1031" Type="ProductStrategy" Mapping="Identifier:1031,Name:vx_1031"/>
+    <Component Name="vx_1032" Type="ProductStrategy" Mapping="Identifier:1032,Name:vx_1032"/>
+    <Component Name="vx_1033" Type="ProductStrategy" Mapping="Identifier:1033,Name:vx_1033"/>
+    <Component Name="vx_1034" Type="ProductStrategy" Mapping="Identifier:1034,Name:vx_1034"/>
+    <Component Name="vx_1035" Type="ProductStrategy" Mapping="Identifier:1035,Name:vx_1035"/>
+    <Component Name="vx_1036" Type="ProductStrategy" Mapping="Identifier:1036,Name:vx_1036"/>
+    <Component Name="vx_1037" Type="ProductStrategy" Mapping="Identifier:1037,Name:vx_1037"/>
+    <Component Name="vx_1038" Type="ProductStrategy" Mapping="Identifier:1038,Name:vx_1038"/>
+    <Component Name="vx_1039" Type="ProductStrategy" Mapping="Identifier:1039,Name:vx_1039"/>
+  </ComponentType>
+</ComponentTypeSet>

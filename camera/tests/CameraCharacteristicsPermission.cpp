@@ -19,6 +19,7 @@
 
 #include <gtest/gtest.h>
 
+#include <android/content/AttributionSourceState.h>
 #include <binder/ProcessState.h>
 #include <utils/Errors.h>
 #include <utils/Log.h>
@@ -47,8 +48,10 @@ void CameraCharacteristicsPermission::SetUp() {
     sp<IServiceManager> sm = defaultServiceManager();
     sp<IBinder> binder = sm->getService(String16("media.camera"));
     mCameraService = interface_cast<ICameraService>(binder);
+    AttributionSourceState clientAttribution;
+    clientAttribution.deviceId = kDefaultDeviceId;
     rc = mCameraService->getNumberOfCameras(
-            hardware::ICameraService::CAMERA_TYPE_ALL, kDefaultDeviceId, /*devicePolicy*/0,
+            hardware::ICameraService::CAMERA_TYPE_ALL, clientAttribution, /*devicePolicy*/0,
             &numCameras);
     EXPECT_TRUE(rc.isOk());
 }
@@ -73,9 +76,11 @@ TEST_F(CameraCharacteristicsPermission, TestCameraPermission) {
 
         CameraMetadata metadata;
         std::vector<int32_t> tagsNeedingPermission;
+        AttributionSourceState clientAttribution;
+        clientAttribution.deviceId = kDefaultDeviceId;
         rc = mCameraService->getCameraCharacteristics(cameraIdStr,
                 /*targetSdkVersion*/__ANDROID_API_FUTURE__,
-                /*overrideToPortrait*/false, kDefaultDeviceId, /*devicePolicy*/0, &metadata);
+                /*overrideToPortrait*/false, clientAttribution, /*devicePolicy*/0, &metadata);
         ASSERT_TRUE(rc.isOk());
         EXPECT_FALSE(metadata.isEmpty());
         EXPECT_EQ(metadata.removePermissionEntries(CAMERA_METADATA_INVALID_VENDOR_ID,

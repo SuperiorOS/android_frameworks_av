@@ -17,10 +17,13 @@
 #define LOG_TAG "CameraServiceWatchdog"
 
 #include "CameraServiceWatchdog.h"
+#include "com_android_internal_camera_flags.h"
 #include "android/set_abort_message.h"
 #include "utils/CameraServiceProxyWrapper.h"
 
 namespace android {
+
+namespace flags = com::android::internal::camera::flags;
 
 bool CameraServiceWatchdog::threadLoop()
 {
@@ -51,6 +54,12 @@ bool CameraServiceWatchdog::threadLoop()
                         true /*deviceError*/);
                 // We use abort here so we can get a tombstone for better
                 // debugging.
+                if (flags::enable_hal_abort_from_cameraservicewatchdog()) {
+                    for (pid_t pid : mProviderPids) {
+                        kill(pid, SIGABRT);
+                    }
+                }
+
                 abort();
             }
         }

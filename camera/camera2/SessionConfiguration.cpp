@@ -72,17 +72,15 @@ status_t SessionConfiguration::readFromParcel(const android::Parcel* parcel) {
 
     bool hasSessionParameters = false;
     CameraMetadata settings;
-    if (flags::feature_combination_query()) {
-        if ((err = parcel->readBool(&hasSessionParameters)) != OK) {
-            ALOGE("%s: Failed to read hasSessionParameters flag from parcel", __FUNCTION__);
-            return err;
-        }
+    if ((err = parcel->readBool(&hasSessionParameters)) != OK) {
+        ALOGE("%s: Failed to read hasSessionParameters flag from parcel", __FUNCTION__);
+        return err;
+    }
 
-        if (hasSessionParameters) {
-            if ((err = settings.readFromParcel(parcel)) != OK) {
-                ALOGE("%s: Failed to read metadata flag from parcel", __FUNCTION__);
-                return err;
-            }
+    if (hasSessionParameters) {
+        if ((err = settings.readFromParcel(parcel)) != OK) {
+            ALOGE("%s: Failed to read metadata flag from parcel", __FUNCTION__);
+            return err;
         }
     }
 
@@ -94,10 +92,8 @@ status_t SessionConfiguration::readFromParcel(const android::Parcel* parcel) {
     for (auto& stream : outputStreams) {
         mOutputStreams.push_back(stream);
     }
-    if (flags::feature_combination_query()) {
-        mHasSessionParameters = hasSessionParameters;
-        mSessionParameters = std::move(settings);
-    }
+    mHasSessionParameters = hasSessionParameters;
+    mSessionParameters = std::move(settings);
 
     return err;
 }
@@ -125,14 +121,12 @@ status_t SessionConfiguration::writeToParcel(android::Parcel* parcel) const {
     err = parcel->writeParcelableVector(mOutputStreams);
     if (err != OK) return err;
 
-    if (flags::feature_combination_query()) {
-        err = parcel->writeBool(mHasSessionParameters);
-        if (err != OK) return err;
+    err = parcel->writeBool(mHasSessionParameters);
+    if (err != OK) return err;
 
-        if (mHasSessionParameters) {
-            err = mSessionParameters.writeToParcel(parcel);
-            if (err != OK) return err;
-        }
+    if (mHasSessionParameters) {
+        err = mSessionParameters.writeToParcel(parcel);
+        if (err != OK) return err;
     }
 
     return OK;

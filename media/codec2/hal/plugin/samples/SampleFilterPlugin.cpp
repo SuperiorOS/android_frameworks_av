@@ -856,21 +856,31 @@ public:
     C2String getName() const override { return "android.sample.filter-plugin-store"; }
     c2_status_t createComponent(
             C2String name, std::shared_ptr<C2Component>* const component) override {
-        if (mFactories.count(name) == 0) {
+        auto it = std::find_if(
+                mFactories.begin(), mFactories.end(),
+                [&name](const std::unique_ptr<ComponentFactory> &factory) {
+                    return name == factory->getTraits()->name;
+                });
+        if (it == mFactories.end()) {
             return C2_BAD_VALUE;
         }
-        return mFactories.at(name)->createComponent(++mNodeId, component);
+        return (*it)->createComponent(++mNodeId, component);
     }
     c2_status_t createInterface(
             C2String name, std::shared_ptr<C2ComponentInterface>* const interface) override {
-        if (mFactories.count(name) == 0) {
+        auto it = std::find_if(
+                mFactories.begin(), mFactories.end(),
+                [&name](const std::unique_ptr<ComponentFactory> &factory) {
+                    return name == factory->getTraits()->name;
+                });
+        if (it == mFactories.end()) {
             return C2_BAD_VALUE;
         }
-        return mFactories.at(name)->createInterface(++mNodeId, interface);
+        return (*it)->createInterface(++mNodeId, interface);
     }
     std::vector<std::shared_ptr<const C2Component::Traits>> listComponents() override {
         std::vector<std::shared_ptr<const C2Component::Traits>> ret;
-        for (const auto &[name, factory] : mFactories) {
+        for (const auto &factory : mFactories) {
             ret.push_back(factory->getTraits());
         }
         return ret;
@@ -951,20 +961,18 @@ private:
 
     template <class T>
     static void AddFactory(
-            std::map<C2String, std::unique_ptr<ComponentFactory>> *factories,
+            std::vector<std::unique_ptr<ComponentFactory>> *factories,
             const std::shared_ptr<C2ReflectorHelper> &reflector) {
         std::shared_ptr<C2ComponentInterface> intf{new typename T::Interface(0, reflector)};
         std::shared_ptr<C2Component::Traits> traits(new (std::nothrow) C2Component::Traits);
         CHECK(C2InterfaceUtils::FillTraitsFromInterface(traits.get(), intf))
                 << "Failed to fill traits from interface";
-        factories->emplace(
-                traits->name,
-                new ComponentFactoryImpl<T>(traits, reflector));
+        factories->emplace_back(new ComponentFactoryImpl<T>(traits, reflector));
     }
 
-    static std::map<C2String, std::unique_ptr<ComponentFactory>> CreateFactories(
+    static std::vector<std::unique_ptr<ComponentFactory>> CreateFactories(
             const std::shared_ptr<C2ReflectorHelper> &reflector) {
-        std::map<C2String, std::unique_ptr<ComponentFactory>> factories;
+        std::vector<std::unique_ptr<ComponentFactory>> factories;
         AddFactory<SampleToneMappingFilter>(&factories, reflector);
         return factories;
     }
@@ -977,7 +985,7 @@ private:
         }
     } mIntf;
 
-    const std::map<C2String, std::unique_ptr<ComponentFactory>> mFactories;
+    const std::vector<std::unique_ptr<ComponentFactory>> mFactories;
 
     std::atomic_int32_t mNodeId{0};
 };

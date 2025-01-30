@@ -120,15 +120,11 @@ extern "C"
     {
         Word32 L_sum;
 
-        L_sum = L_var1 + L_var2;
-
-        if ((L_var1 ^ L_var2) >= 0)
+        if (__builtin_add_overflow(L_var1, L_var2, &L_sum))
         {
-            if ((L_sum ^ L_var1) < 0)
-            {
-                L_sum = (L_var1 < 0) ? MIN_32 : MAX_32;
-                *pOverflow = 1;
-            }
+            // saturating...
+            L_sum = (L_var1 < 0) ? MIN_32 : MAX_32;
+            *pOverflow = 1;
         }
 
         return (L_sum);
@@ -160,15 +156,11 @@ extern "C"
     {
         Word32 L_diff;
 
-        L_diff = L_var1 - L_var2;
-
-        if ((L_var1 ^ L_var2) < 0)
+        if (__builtin_sub_overflow(L_var1, L_var2, &L_diff))
         {
-            if ((L_diff ^ L_var1) & MIN_32)
-            {
-                L_diff = (L_var1 < 0L) ? MIN_32 : MAX_32;
-                *pOverflow = 1;
-            }
+            // saturating...
+            L_diff = (L_var1 < 0L) ? MIN_32 : MAX_32;
+            *pOverflow = 1;
         }
 
         return (L_diff);
@@ -204,16 +196,12 @@ extern "C"
         result = (Word32) var1 * var2;
         if (result != (Word32) 0x40000000L)
         {
-            L_sum = (result << 1) + L_var3;
-
             /* Check if L_sum and L_var_3 share the same sign */
-            if ((L_var3 ^ result) > 0)
+            if (__builtin_add_overflow((result << 1), L_var3, &L_sum))
             {
-                if ((L_sum ^ L_var3) < 0)
-                {
-                    L_sum = (L_var3 < 0) ? MIN_32 : MAX_32;
-                    *pOverflow = 1;
-                }
+                // saturating...
+                L_sum = (L_var3 < 0) ? MIN_32 : MAX_32;
+                *pOverflow = 1;
             }
         }
         else
@@ -345,14 +333,10 @@ extern "C"
         product32 = ((Word32) L_var1_hi * L_var2_lo) >> 15;
 
         /* L_product = L_mac (L_product, result, 1, pOverflow); */
-        L_sum = L_product + (product32 << 1);
-
-        if ((L_product ^ product32) > 0)
+        if (__builtin_add_overflow(L_product, (product32 << 1), &L_sum))
         {
-            if ((L_sum ^ L_product) < 0)
-            {
-                L_sum = (L_product < 0) ? MIN_32 : MAX_32;
-            }
+            // saturating...
+            L_sum = (L_product < 0) ? MIN_32 : MAX_32;
         }
 
         L_product = L_sum;
@@ -361,14 +345,10 @@ extern "C"
         product32 = ((Word32) L_var1_lo * L_var2_hi) >> 15;
 
         /* L_product = L_mac (L_product, result, 1, pOverflow); */
-        L_sum = L_product + (product32 << 1);
-
-        if ((L_product ^ product32) > 0)
+        if (__builtin_add_overflow(L_product, (product32 << 1), &L_sum))
         {
-            if ((L_sum ^ L_product) < 0)
-            {
-                L_sum = (L_product < 0) ? MIN_32 : MAX_32;
-            }
+            // saturating...
+            L_sum = (L_product < 0) ? MIN_32 : MAX_32;
         }
         return (L_sum);
     }
@@ -416,15 +396,11 @@ extern "C"
 
         result = ((Word32)L_var1_lo * var2) >> 15;
 
-        L_sum  =  L_product + (result << 1);
-
-        if ((L_product ^ result) > 0)
+        if (__builtin_add_overflow(L_product, (result << 1), &L_sum))
         {
-            if ((L_sum ^ L_product) < 0)
-            {
-                L_sum = (L_product < 0) ? MIN_32 : MAX_32;
-                *pOverflow = 1;
-            }
+            // saturating...
+            L_sum = (L_product < 0) ? MIN_32 : MAX_32;
+            *pOverflow = 1;
         }
         return (L_sum);
 

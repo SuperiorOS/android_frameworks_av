@@ -562,6 +562,30 @@ inline static const char *asString_DolbyVisionLevel(int32_t i, const char *def =
     }
 }
 
+inline constexpr int32_t DTS_HDProfileHRA = 0x1;
+inline constexpr int32_t DTS_HDProfileLBR = 0x2;
+inline constexpr int32_t DTS_HDProfileMA = 0x4;
+
+inline static const char *asString_Dts_HDProfile(int32_t i, const char *def = "??") {
+    switch (i) {
+        case DTS_HDProfileHRA:  return "HRA";
+        case DTS_HDProfileLBR:  return "LBR";
+        case DTS_HDProfileMA:   return "MA";
+        default:                return def;
+    }
+}
+
+inline constexpr int32_t DTS_UHDProfileP1 = 0x1;
+inline constexpr int32_t DTS_UHDProfileP2 = 0x2;
+
+inline static const char *asString_Dts_UHDProfile(int32_t i, const char *def = "??") {
+    switch (i) {
+        case DTS_UHDProfileP1:  return "P1";
+        case DTS_UHDProfileP2:  return "P2";
+        default:                return def;
+    }
+}
+
 inline constexpr int32_t BITRATE_MODE_CBR = 2;
 inline constexpr int32_t BITRATE_MODE_CBR_FD = 3;
 inline constexpr int32_t BITRATE_MODE_CQ = 0;
@@ -729,8 +753,13 @@ inline constexpr char MIMETYPE_AUDIO_RAW[] = "audio/raw";
 inline constexpr char MIMETYPE_AUDIO_FLAC[] = "audio/flac";
 inline constexpr char MIMETYPE_AUDIO_MSGSM[] = "audio/gsm";
 inline constexpr char MIMETYPE_AUDIO_AC3[] = "audio/ac3";
+inline constexpr char MIMETYPE_AUDIO_AC4[] = "audio/ac4";
 inline constexpr char MIMETYPE_AUDIO_EAC3[] = "audio/eac3";
+inline constexpr char MIMETYPE_AUDIO_EAC3_JOC[] = "audio/eac3-joc";
 inline constexpr char MIMETYPE_AUDIO_SCRAMBLED[] = "audio/scrambled";
+inline constexpr char MIMETYPE_AUDIO_DTS[] = "audio/vnd.dts";
+inline constexpr char MIMETYPE_AUDIO_DTS_HD[] = "audio/vnd.dts.hd";
+inline constexpr char MIMETYPE_AUDIO_DTS_UHD[] = "audio/vnd.dts.uhd";
 
 inline constexpr char MIMETYPE_IMAGE_ANDROID_HEIC[] = "image/vnd.android.heic";
 

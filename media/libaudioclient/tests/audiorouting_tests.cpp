@@ -64,16 +64,17 @@ TEST(AudioTrackTest, TestPerformanceMode) {
         EXPECT_EQ(OK, ap->start()) << "audio track start failed";
         EXPECT_EQ(OK, ap->onProcess());
         EXPECT_EQ(OK, cb->waitForAudioDeviceCb());
-        EXPECT_TRUE(checkPatchPlayback(cb->mAudioIo, cb->mDeviceId));
+        const auto [audioIo, deviceId] = cb->getLastPortAndDevice();
+        EXPECT_TRUE(checkPatchPlayback(audioIo, deviceId));
         EXPECT_NE(0, ap->getAudioTrackHandle()->getFlags() & output_flags[i]);
         audio_patch patch;
-        EXPECT_EQ(OK, getPatchForOutputMix(cb->mAudioIo, patch));
+        EXPECT_EQ(OK, getPatchForOutputMix(audioIo, patch));
         if (output_flags[i] != AUDIO_OUTPUT_FLAG_FAST) {
             // A "normal" output can still have a FastMixer, depending on the buffer size.
             // Thus, a fast track can be created on a mix port which does not have the FAST flag.
             for (auto j = 0; j < patch.num_sources; j++) {
                 if (patch.sources[j].type == AUDIO_PORT_TYPE_MIX &&
-                    patch.sources[j].ext.mix.handle == cb->mAudioIo) {
+                    patch.sources[j].ext.mix.handle == audioIo) {
                     SCOPED_TRACE(dumpPortConfig(patch.sources[j]));
                     EXPECT_NE(0, patch.sources[j].flags.output & output_flags[i])
                             << "expected output flag "

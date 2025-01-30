@@ -25,6 +25,7 @@ cc_defaults {
         "libEGL",
         "libGLESv2",
         "libGLESv3",
+        "android.companion.virtualdevice.flags-aconfig-cc",
     ],
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
@@ -65,14 +66,7 @@ cc_library_static {
 cc_library_static {
     name: "libvirtualcamera",
     srcs: [
-        "VirtualCameraProvider.cc",
-        "VirtualCameraDevice.cc",
-        "VirtualCameraSession.cc",
-        "VirtualCameraStream.cc",
-        "VirtualCameraService.cc",
-        "VirtualCameraSessionContext.cc",
-        "VirtualCameraTestInstance.cc",
-        "VirtualCameraRenderThread.cc",
+        "*.cc",
     ],
     defaults: [
         "libvirtualcamera_defaults",

@@ -33,6 +33,7 @@
 #include <fastpath/FastMixer.h>
 #include <mediautils/Synchronization.h>
 #include <mediautils/ThreadSnapshot.h>
+#include <psh_utils/Token.h>
 #include <timing/MonotonicFrameCounter.h>
 #include <utils/Log.h>
 
@@ -379,10 +380,10 @@ public:
         return isOutput() ? outDeviceTypes_l() : DeviceTypeSet({inDeviceType_l()});
     }
 
-    const AudioDeviceTypeAddrVector& outDeviceTypeAddrs() const final {
+    const AudioDeviceTypeAddrVector& outDeviceTypeAddrs() const final REQUIRES(mutex()) {
         return mOutDeviceTypeAddrs;
     }
-    const AudioDeviceTypeAddr& inDeviceTypeAddr() const final {
+    const AudioDeviceTypeAddr& inDeviceTypeAddr() const final REQUIRES(mutex()) {
         return mInDeviceTypeAddr;
     }
 
@@ -571,6 +572,10 @@ public:
     void stopMelComputation_l() override
             REQUIRES(audio_utils::AudioFlinger_Mutex);
 
+    audio_utils::DeferredExecutor& getThreadloopExecutor() override {
+        return mThreadloopExecutor;
+    }
+
 protected:
 
                 // entry describing an effect being suspended in mSuspendedSessions keyed vector
@@ -721,6 +726,7 @@ protected:
                 char                    mThreadName[kThreadNameLength]; // guaranteed NUL-terminated
     sp<os::IPowerManager> mPowerManager GUARDED_BY(mutex());
     sp<IBinder> mWakeLockToken GUARDED_BY(mutex());
+    std::unique_ptr<media::psh_utils::Token> mThreadToken GUARDED_BY(mutex());
                 const sp<PMDeathRecipient> mDeathRecipient;
                 // list of suspended effects per session and per type. The first (outer) vector is
                 // keyed by session ID, the second (inner) by type UUID timeLow field
@@ -832,6 +838,12 @@ protected:
                     typename SortedVector<sp<T>>::iterator end() {
                         return mActiveTracks.end();
                     }
+                    typename SortedVector<const sp<T>>::iterator begin() const {
+                        return mActiveTracks.begin();
+                    }
+                    typename SortedVector<const sp<T>>::iterator end() const {
+                        return mActiveTracks.end();
+                    }
 
                     // Due to Binder recursion optimization, clear() and updatePowerState()
                     // cannot be called from a Binder thread because they may call back into
@@ -876,6 +888,14 @@ protected:
                 };
 
                 SimpleLog mLocalLog;  // locked internally
+
+    // mThreadloopExecutor contains deferred functors and object (dtors) to
+    // be executed at the end of the processing period, without any
+    // mutexes held.
+    //
+    // mThreadloopExecutor is locked internally, so its methods are thread-safe
+    // for access.
+    audio_utils::DeferredExecutor mThreadloopExecutor;
 
     private:
     void dumpBase_l(int fd, const Vector<String16>& args) REQUIRES(mutex());
@@ -999,6 +1019,9 @@ public:
     void setStreamVolume(audio_stream_type_t stream, float value) final EXCLUDES_ThreadBase_Mutex;
     void setStreamMute(audio_stream_type_t stream, bool muted) final EXCLUDES_ThreadBase_Mutex;
     float streamVolume(audio_stream_type_t stream) const final EXCLUDES_ThreadBase_Mutex;
+    status_t setPortsVolume(const std::vector<audio_port_handle_t>& portIds, float volume)
+            final EXCLUDES_ThreadBase_Mutex;
+
     void setVolumeForOutput_l(float left, float right) const final;
 
     sp<IAfTrack> createTrack_l(
@@ -1023,7 +1046,8 @@ public:
                                 const sp<media::IAudioTrackCallback>& callback,
                                 bool isSpatialized,
                                 bool isBitPerfect,
-                                audio_output_flags_t* afTrackFlags) final
+                                audio_output_flags_t* afTrackFlags,
+                                float volume) final
             REQUIRES(audio_utils::AudioFlinger_Mutex);
 
     bool isTrackActive(const sp<IAfTrack>& track) const final {
@@ -2373,6 +2397,8 @@ public:
     void setStreamVolume(audio_stream_type_t stream, float value) final EXCLUDES_ThreadBase_Mutex;
     void setStreamMute(audio_stream_type_t stream, bool muted) final EXCLUDES_ThreadBase_Mutex;
     float streamVolume(audio_stream_type_t stream) const final EXCLUDES_ThreadBase_Mutex;
+    status_t setPortsVolume(const std::vector<audio_port_handle_t>& portIds, float volume)
+            final EXCLUDES_ThreadBase_Mutex;
 
     void setMasterMute_l(bool muted) REQUIRES(mutex()) { mMasterMute = muted; }
 

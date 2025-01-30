@@ -73,7 +73,9 @@ class DeviceHalHidl : public DeviceHalInterface, public CoreConversionHelperHidl
     // by releasing all references to the returned object.
     status_t openOutputStream(audio_io_handle_t handle, audio_devices_t devices,
                               audio_output_flags_t flags, struct audio_config* config,
-                              const char* address, sp<StreamOutHalInterface>* outStream) override;
+                              const char* address, sp<StreamOutHalInterface>* outStream,
+                              const std::vector<playback_track_metadata_v7_t>&
+                                                                sourceMetadata = {}) override;
 
     // Creates and opens the audio hardware input stream. The stream is closed
     // by releasing all references to the returned object.

@@ -362,13 +362,26 @@ static status_t prepareVirtualDisplay(
         const ui::DisplayState& displayState,
         const sp<IGraphicBufferProducer>& bufferProducer,
         sp<IBinder>* pDisplayHandle, sp<SurfaceControl>* mirrorRoot) {
-    static const std::string kDisplayName("ScreenRecorder");
+    std::string displayName = gPhysicalDisplayId
+      ? "ScreenRecorder " + to_string(*gPhysicalDisplayId)
+      : "ScreenRecorder";
+    static const std::string kDisplayName(displayName);
+
     sp<IBinder> dpy = SurfaceComposerClient::createVirtualDisplay(kDisplayName, gSecureDisplay);
     SurfaceComposerClient::Transaction t;
     t.setDisplaySurface(dpy, bufferProducer);
     setDisplayProjection(t, dpy, displayState);
+
+    // ensures that random layer stack assigned to virtual display changes
+    // between calls - if a list of displays with their layer stacks becomes
+    // available, we should use it to ensure a new layer stack is used here
+    std::srand(
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()
+       ).count());
     ui::LayerStack layerStack = ui::LayerStack::fromValue(std::rand());
     t.setDisplayLayerStack(dpy, layerStack);
+
     PhysicalDisplayId displayId;
     status_t err = getPhysicalDisplayId(displayId);
     if (err != NO_ERROR) {
@@ -1224,6 +1237,8 @@ static void usage() {
         "    see \"dumpsys SurfaceFlinger --display-id\" for valid display IDs.\n"
         "--verbose\n"
         "    Display interesting information on stdout.\n"
+        "--version\n"
+        "    Show Android screenrecord version.\n"
         "--help\n"
         "    Show this message.\n"
         "\n"
@@ -1255,6 +1270,7 @@ int main(int argc, char* const argv[]) {
         { "bframes",            required_argument,  NULL, 'B' },
         { "display-id",         required_argument,  NULL, 'd' },
         { "capture-secure",     no_argument,        NULL, 'S' },
+        { "version",            no_argument,        NULL, 'x' },
         { NULL,                 0,                  NULL, 0 }
     };
 
@@ -1377,6 +1393,9 @@ int main(int argc, char* const argv[]) {
         case 'S':
             gSecureDisplay = true;
             break;
+        case 'x':
+            fprintf(stderr, "%d.%d\n", kVersionMajor, kVersionMinor);
+            return 0;
         default:
             if (ic != '?') {
                 fprintf(stderr, "getopt_long returned unexpected value 0x%x\n", ic);

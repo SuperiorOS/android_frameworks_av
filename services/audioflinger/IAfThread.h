@@ -19,12 +19,14 @@
 #include <android/media/IAudioTrackCallback.h>
 #include <android/media/IEffectClient.h>
 #include <audiomanager/IAudioManager.h>
-#include <audio_utils/mutex.h>
+#include <audio_utils/DeferredExecutor.h>
 #include <audio_utils/MelProcessor.h>
+#include <audio_utils/mutex.h>
 #include <binder/MemoryDealer.h>
 #include <datapath/AudioStreamIn.h>
 #include <datapath/AudioStreamOut.h>
 #include <datapath/VolumeInterface.h>
+#include <datapath/VolumePortInterface.h>
 #include <fastpath/FastMixerDumpState.h>
 #include <media/DeviceDescriptorBase.h>
 #include <media/MmapStreamInterface.h>
@@ -35,6 +37,10 @@
 #include <vibrator/ExternalVibration.h>
 
 #include <optional>
+
+namespace com::android::media::permission {
+    class IPermissionProvider;
+}
 
 namespace android {
 
@@ -121,6 +127,9 @@ public:
             EXCLUDES_AudioFlinger_ClientMutex = 0;
 
     virtual void onHardError(std::set<audio_port_handle_t>& trackPortIds) = 0;
+
+    virtual const ::com::android::media::permission::IPermissionProvider&
+            getPermissionProvider() = 0;
 };
 
 class IAfThreadBase : public virtual RefBase {
@@ -395,6 +404,12 @@ public:
     // avoid races.
     virtual void waitWhileThreadBusy_l(audio_utils::unique_lock& ul)
             REQUIRES(mutex()) = 0;
+
+    // The ThreadloopExecutor is used to defer functors or dtors
+    // to when the Threadloop does not hold any mutexes (at the end of the
+    // processing period cycle).
+    virtual audio_utils::DeferredExecutor& getThreadloopExecutor() = 0;
+
     // Dynamic cast to derived interface
     virtual sp<IAfDirectOutputThread> asIAfDirectOutputThread() { return nullptr; }
     virtual sp<IAfDuplicatingThread> asIAfDuplicatingThread() { return nullptr; }
@@ -465,7 +480,8 @@ public:
             const sp<media::IAudioTrackCallback>& callback,
             bool isSpatialized,
             bool isBitPerfect,
-            audio_output_flags_t* afTrackFlags)
+            audio_output_flags_t* afTrackFlags,
+            float volume)
             REQUIRES(audio_utils::AudioFlinger_Mutex) = 0;
 
     virtual status_t addTrack_l(const sp<IAfTrack>& track) REQUIRES(mutex()) = 0;
@@ -540,6 +556,9 @@ public:
     virtual bool usesHwAvSync() const = 0;
 
     virtual void setTracksInternalMute(std::map<audio_port_handle_t, bool>* tracksInternalMute)
+            EXCLUDES_ThreadBase_Mutex = 0;
+
+    virtual status_t setPortsVolume(const std::vector<audio_port_handle_t>& portIds, float volume)
             EXCLUDES_ThreadBase_Mutex = 0;
 };
 
@@ -680,6 +699,9 @@ public:
             AudioHwDevice* hwDev, AudioStreamOut* output, bool systemReady);
 
     virtual AudioStreamOut* clearOutput() EXCLUDES_ThreadBase_Mutex = 0;
+
+    virtual status_t setPortsVolume(const std::vector<audio_port_handle_t>& portIds, float volume)
+            EXCLUDES_ThreadBase_Mutex = 0;
 };
 
 class IAfMmapCaptureThread : public virtual IAfMmapThread {

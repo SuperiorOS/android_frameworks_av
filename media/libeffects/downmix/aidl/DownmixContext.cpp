@@ -100,11 +100,6 @@ RetCode DownmixContext::disable() {
     return RetCode::SUCCESS;
 }
 
-void DownmixContext::reset() {
-    disable();
-    resetBuffer();
-}
-
 IEffect::Status DownmixContext::downmixProcess(float* in, float* out, int samples) {
     IEffect::Status status = {EX_ILLEGAL_ARGUMENT, 0, 0};
 

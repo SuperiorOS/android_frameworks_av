@@ -128,7 +128,8 @@ private:
     int32_t              mOutputColorSpace;
     int64_t              mOutputStreamUseCase;
     nsecs_t              mFirstRequestLatency;
-    sp<ProducerListener> mProducerListener;
+
+    sp<StreamSurfaceListener> mStreamSurfaceListener;
 
     ssize_t              mMaxJpegBufferSize;
     ssize_t              mUHRMaxJpegBufferSize;

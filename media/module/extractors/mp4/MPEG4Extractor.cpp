@@ -523,11 +523,10 @@ media_status_t MPEG4Extractor::getTrackMetaData(
     }
 
     [this, &track] {
-        int64_t duration;
+        int64_t duration = track->mMdhdDurationUs;
         int32_t samplerate;
         // Only for audio track.
-        if (track->elst_needs_processing && mHeaderTimescale != 0 &&
-            AMediaFormat_getInt64(track->meta, AMEDIAFORMAT_KEY_DURATION, &duration) &&
+        if (track->elst_needs_processing && mHeaderTimescale != 0 && duration != 0 &&
             AMediaFormat_getInt32(track->meta, AMEDIAFORMAT_KEY_SAMPLE_RATE, &samplerate)) {
             // Elst has to be processed only the first time this function is called.
             track->elst_needs_processing = false;
@@ -1645,7 +1644,10 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
                           (long long) duration, (long long) mLastTrack->timescale);
                     return ERROR_MALFORMED;
                 }
-                AMediaFormat_setInt64(mLastTrack->meta, AMEDIAFORMAT_KEY_DURATION, durationUs);
+                // Store this track's mdhd duration to calculate the padding.
+                mLastTrack->mMdhdDurationUs = (int64_t)durationUs;
+            } else {
+                mLastTrack->mMdhdDurationUs = 0;
             }
 
             uint8_t lang[2];
@@ -3907,17 +3909,18 @@ status_t MPEG4Extractor::parseTrackHeader(
     }
 
     int32_t id;
+    int64_t duration;
 
     if (version == 1) {
         // we can get ctime value from U64_AT(&buffer[4])
         // we can get mtime value from U64_AT(&buffer[12])
         id = U32_AT(&buffer[20]);
-        // we can get duration value from U64_AT(&buffer[28])
+        duration = U64_AT(&buffer[28]);
     } else if (version == 0) {
         // we can get ctime value from U32_AT(&buffer[4])
         // we can get mtime value from U32_AT(&buffer[8])
         id = U32_AT(&buffer[12]);
-        // we can get duration value from U32_AT(&buffer[20])
+        duration = U32_AT(&buffer[20]);
     } else {
         return ERROR_UNSUPPORTED;
     }
@@ -3926,6 +3929,15 @@ status_t MPEG4Extractor::parseTrackHeader(
         return ERROR_MALFORMED;
 
     AMediaFormat_setInt32(mLastTrack->meta, AMEDIAFORMAT_KEY_TRACK_ID, id);
+    if (duration != 0 && mHeaderTimescale != 0) {
+        long double durationUs = ((long double)duration * 1000000) / mHeaderTimescale;
+        if (durationUs < 0 || durationUs > INT64_MAX) {
+            ALOGE("cannot represent %lld * 1000000 / %lld in 64 bits",
+                  (long long) duration, (long long) mHeaderTimescale);
+            return ERROR_MALFORMED;
+        }
+        AMediaFormat_setInt64(mLastTrack->meta, AMEDIAFORMAT_KEY_DURATION, durationUs);
+    }
 
     size_t matrixOffset = dynSize + 16;
     int32_t a00 = U32_AT(&buffer[matrixOffset]);

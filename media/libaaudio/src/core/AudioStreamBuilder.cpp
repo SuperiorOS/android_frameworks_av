@@ -50,15 +50,6 @@ using android::media::audio::common::AudioMMapPolicyType;
 #define AAUDIO_MMAP_POLICY_DEFAULT_AIDL        AudioMMapPolicy::NEVER
 #define AAUDIO_MMAP_EXCLUSIVE_POLICY_DEFAULT_AIDL AudioMMapPolicy::NEVER
 
-// These values are for a pre-check before we ask the lower level service to open a stream.
-// So they are just outside the maximum conceivable range of value,
-// on the edge of being ridiculous.
-// TODO These defines should be moved to a central place in audio.
-#define SAMPLES_PER_FRAME_MIN        1
-#define SAMPLES_PER_FRAME_MAX        FCC_LIMIT
-#define SAMPLE_RATE_HZ_MIN           8000
-// HDMI supports up to 32 channels at 1536000 Hz.
-#define SAMPLE_RATE_HZ_MAX           1600000
 #define FRAMES_PER_DATA_CALLBACK_MIN 1
 #define FRAMES_PER_DATA_CALLBACK_MAX (1024 * 1024)
 
@@ -118,10 +109,12 @@ aaudio_result_t AudioStreamBuilder::build(AudioStream** streamPtr) {
 
     std::vector<AudioMMapPolicyInfo> policyInfos;
     aaudio_policy_t mmapPolicy = AudioGlobal_getMMapPolicy();
-    if (android::AudioSystem::getMmapPolicyInfo(
-            AudioMMapPolicyType::DEFAULT, &policyInfos) == NO_ERROR) {
+    ALOGD("%s, global mmap policy is %d", __func__, mmapPolicy);
+    if (status_t status = android::AudioSystem::getMmapPolicyInfo(
+            AudioMMapPolicyType::DEFAULT, &policyInfos); status == NO_ERROR) {
         aaudio_policy_t systemMmapPolicy = AAudio_getAAudioPolicy(
                 policyInfos, AAUDIO_MMAP_POLICY_DEFAULT_AIDL);
+        ALOGD("%s, system mmap policy is %d", __func__, systemMmapPolicy);
         if (mmapPolicy == AAUDIO_POLICY_ALWAYS && systemMmapPolicy == AAUDIO_POLICY_NEVER) {
             // No need to try as AAudioService is not created and the client only wants MMAP path.
             return AAUDIO_ERROR_NO_SERVICE;
@@ -134,6 +127,7 @@ aaudio_result_t AudioStreamBuilder::build(AudioStream** streamPtr) {
             mmapPolicy = systemMmapPolicy;
         }
     } else {
+        ALOGD("%s, failed to query system mmap policy, error=%d", __func__, status);
         // If it fails querying mmap policy info, it is highly possible that the AAudioService is
         // not created. In this case, we don't try mmap path.
         if (mmapPolicy == AAUDIO_POLICY_ALWAYS) {
@@ -145,17 +139,22 @@ aaudio_result_t AudioStreamBuilder::build(AudioStream** streamPtr) {
     if (mmapPolicy == AAUDIO_UNSPECIFIED) {
         mmapPolicy = AAUDIO_MMAP_POLICY_DEFAULT;
     }
+    ALOGD("%s, final mmap policy is %d", __func__, mmapPolicy);
 
     policyInfos.clear();
     aaudio_policy_t mmapExclusivePolicy = AAUDIO_UNSPECIFIED;
-    if (android::AudioSystem::getMmapPolicyInfo(
-            AudioMMapPolicyType::EXCLUSIVE, &policyInfos) == NO_ERROR) {
+    if (status_t status = android::AudioSystem::getMmapPolicyInfo(
+            AudioMMapPolicyType::EXCLUSIVE, &policyInfos); status == NO_ERROR) {
         mmapExclusivePolicy = AAudio_getAAudioPolicy(
                 policyInfos, AAUDIO_MMAP_EXCLUSIVE_POLICY_DEFAULT_AIDL);
+        ALOGD("%s, system mmap exclusive policy is %d", __func__, mmapExclusivePolicy);
+    } else {
+        ALOGD("%s, failed to query mmap exclusive policy, error=%d", __func__, status);
     }
     if (mmapExclusivePolicy == AAUDIO_UNSPECIFIED) {
         mmapExclusivePolicy = AAUDIO_MMAP_EXCLUSIVE_POLICY_DEFAULT;
     }
+    ALOGD("%s, final mmap exclusive policy is %d", __func__, mmapExclusivePolicy);
 
     aaudio_sharing_mode_t sharingMode = getSharingMode();
     if ((sharingMode == AAUDIO_SHARING_MODE_EXCLUSIVE)

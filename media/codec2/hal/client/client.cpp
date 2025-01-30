@@ -2391,7 +2391,12 @@ c2_status_t Codec2Client::Component::setOutputSurface(
                        "GraphicBufferAllocator was not created.";
             return C2_CORRUPTED;
         }
+        // Note: Consumer usage is set ahead of the HAL allocator(gba) being set.
+        // This is same as HIDL.
+        uint64_t consumerUsage = configConsumerUsage(surface);
         bool ret = gba->configure(surface, generation, maxDequeueCount);
+        ALOGD("setOutputSurface -- generation=%u consumer usage=%#llx",
+              generation, (long long)consumerUsage);
         return ret ? C2_OK : C2_CORRUPTED;
     }
     uint64_t bqId = 0;
@@ -2419,41 +2424,9 @@ c2_status_t Codec2Client::Component::setOutputSurface(
                                       mHidlBase1_2 ? &syncObj : nullptr);
     }
 
-    // set consumer bits
-    // TODO: should this get incorporated into setOutputSurface method so that consumer bits
-    // can be set atomically?
-    uint64_t consumerUsage = kDefaultConsumerUsage;
-    {
-        if (surface) {
-            uint64_t usage = 0;
-            status_t err = surface->getConsumerUsage(&usage);
-            if (err != NO_ERROR) {
-                ALOGD("setOutputSurface -- failed to get consumer usage bits (%d/%s). ignoring",
-                        err, asString(err));
-            } else {
-                // Note: we are adding the default usage because components must support
-                // producing output frames that can be displayed an all output surfaces.
-
-                // TODO: do not set usage for tunneled scenario. It is unclear if consumer usage
-                // is meaningful in a tunneled scenario; on one hand output buffers exist, but
-                // they do not exist inside of C2 scope. Any buffer usage shall be communicated
-                // through the sideband channel.
-
-                consumerUsage = usage | kDefaultConsumerUsage;
-            }
-        }
-
-        C2StreamUsageTuning::output outputUsage{
-                0u, C2AndroidMemoryUsage::FromGrallocUsage(consumerUsage).expected};
-        std::vector<std::unique_ptr<C2SettingResult>> failures;
-        c2_status_t err = config({&outputUsage}, C2_MAY_BLOCK, &failures);
-        if (err != C2_OK) {
-            ALOGD("setOutputSurface -- failed to set consumer usage (%d/%s)",
-                    err, asString(err));
-        }
-    }
+    uint64_t consumerUsage = configConsumerUsage(surface);
     ALOGD("setOutputSurface -- generation=%u consumer usage=%#llx%s",
-            generation, (long long)consumerUsage, syncObj ? " sync" : "");
+          generation, (long long)consumerUsage, syncObj ? " sync" : "");
 
     Return<c2_hidl::Status> transStatus = syncObj ?
             mHidlBase1_2->setOutputSurfaceWithSyncObj(
@@ -2493,6 +2466,44 @@ status_t Codec2Client::Component::queueToOutputSurface(
         }
     }
     return mOutputBufferQueue->outputBuffer(block, input, output);
+}
+
+uint64_t Codec2Client::Component::configConsumerUsage(
+        const sp<IGraphicBufferProducer>& surface) {
+    // set consumer bits
+    // TODO: should this get incorporated into setOutputSurface method so that consumer bits
+    // can be set atomically?
+    uint64_t consumerUsage = kDefaultConsumerUsage;
+    {
+        if (surface) {
+            uint64_t usage = 0;
+            status_t err = surface->getConsumerUsage(&usage);
+            if (err != NO_ERROR) {
+                ALOGD("setOutputSurface -- failed to get consumer usage bits (%d/%s). ignoring",
+                        err, asString(err));
+            } else {
+                // Note: we are adding the default usage because components must support
+                // producing output frames that can be displayed an all output surfaces.
+
+                // TODO: do not set usage for tunneled scenario. It is unclear if consumer usage
+                // is meaningful in a tunneled scenario; on one hand output buffers exist, but
+                // they do not exist inside of C2 scope. Any buffer usage shall be communicated
+                // through the sideband channel.
+
+                consumerUsage = usage | kDefaultConsumerUsage;
+            }
+        }
+
+        C2StreamUsageTuning::output outputUsage{
+                0u, C2AndroidMemoryUsage::FromGrallocUsage(consumerUsage).expected};
+        std::vector<std::unique_ptr<C2SettingResult>> failures;
+        c2_status_t err = config({&outputUsage}, C2_MAY_BLOCK, &failures);
+        if (err != C2_OK) {
+            ALOGD("setOutputSurface -- failed to set consumer usage (%d/%s)",
+                    err, asString(err));
+        }
+    }
+    return consumerUsage;
 }
 
 void Codec2Client::Component::pollForRenderedFrames(FrameEventHistoryDelta* delta) {
@@ -2554,6 +2565,19 @@ void Codec2Client::Component::onBufferReleasedFromOutputSurface(
         return;
     }
     mOutputBufferQueue->onBufferReleased(generation);
+}
+
+void Codec2Client::Component::onBufferAttachedToOutputSurface(
+        uint32_t generation) {
+    if (mAidlBase) {
+        std::shared_ptr<AidlGraphicBufferAllocator> gba =
+                mGraphicBufferAllocators->current();
+        if (gba) {
+            gba->onBufferAttached(generation);
+        }
+        return;
+    }
+    mOutputBufferQueue->onBufferAttached(generation);
 }
 
 void Codec2Client::Component::holdIgbaBlocks(

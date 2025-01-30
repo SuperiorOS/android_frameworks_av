@@ -28,20 +28,6 @@ class AudioPolicyManagerObserver;
 namespace audio_policy
 {
 
-enum legacy_strategy {
-    STRATEGY_NONE = -1,
-    STRATEGY_MEDIA,
-    STRATEGY_PHONE,
-    STRATEGY_SONIFICATION,
-    STRATEGY_SONIFICATION_RESPECTFUL,
-    STRATEGY_DTMF,
-    STRATEGY_ENFORCED_AUDIBLE,
-    STRATEGY_TRANSMITTED_THROUGH_SPEAKER,
-    STRATEGY_ACCESSIBILITY,
-    STRATEGY_REROUTING,
-    STRATEGY_CALL_ASSISTANT,
-};
-
 class Engine : public EngineBase
 {
 public:

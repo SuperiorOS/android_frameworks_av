@@ -32,6 +32,28 @@
 
 namespace android {
 
+/*
+ * Helper macro to add instance name, function name in logs
+ * classes should provide getInstanceName API to use these macros.
+ * print function names along with instance name.
+ *
+ * Usage:
+ *  AUGMENT_LOG(D);
+ *  AUGMENT_LOG(I, "hello!");
+ *  AUGMENT_LOG(W, "value: %d", value);
+ *
+ *  AUGMENT_LOG_IF(D, value < 0, "negative");
+ *  AUGMENT_LOG_IF(E, value < 0, "bad value: %d", value);
+ */
+
+#define AUGMENT_LOG(level, ...)                                                  \
+    ALOG##level("[%s] %s" __VA_OPT__(": " __android_second(0, __VA_ARGS__, "")), \
+                getInstanceName().c_str(), __func__ __VA_OPT__(__android_rest(__VA_ARGS__)))
+
+#define AUGMENT_LOG_IF(level, cond, ...)                                                    \
+    ALOG##level##_IF(cond, "[%s] %s" __VA_OPT__(": " __android_second(0, __VA_ARGS__, "")), \
+                     getInstanceName().c_str(), __func__ __VA_OPT__(__android_rest(__VA_ARGS__)))
+
 class Args {
   public:
     explicit Args(const Vector<String16>& args)
@@ -49,13 +71,15 @@ class Args {
 
 class ConversionHelperAidl {
   protected:
-    ConversionHelperAidl(std::string_view className) : mClassName(className) {}
+    ConversionHelperAidl(std::string_view className, std::string_view instanceName)
+        : mClassName(className), mInstanceName(instanceName) {}
 
-    const std::string& getClassName() const {
-        return mClassName;
-    }
+    const std::string& getClassName() const { return mClassName; }
+
+    const std::string& getInstanceName() const { return mInstanceName; }
 
     const std::string mClassName;
+    const std::string mInstanceName;
 };
 
 // 'action' must accept a value of type 'T' and return 'status_t'.

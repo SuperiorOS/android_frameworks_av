@@ -133,7 +133,7 @@ const std::string& Camera3Device::getId() const {
     return mId;
 }
 
-status_t Camera3Device::initializeCommonLocked() {
+status_t Camera3Device::initializeCommonLocked(sp<CameraProviderManager> manager) {
 
     /** Start up status tracker thread */
     mStatusTracker = new StatusTracker(this);
@@ -251,7 +251,8 @@ status_t Camera3Device::initializeCommonLocked() {
     mInjectionMethods = createCamera3DeviceInjectionMethods(this);
 
     /** Start watchdog thread */
-    mCameraServiceWatchdog = new CameraServiceWatchdog(mId, mCameraServiceProxyWrapper);
+    mCameraServiceWatchdog = new CameraServiceWatchdog(
+            manager->getProviderPids(), mId, mCameraServiceProxyWrapper);
     res = mCameraServiceWatchdog->run("CameraServiceWatchdog");
     if (res != OK) {
         SET_ERR_L("Unable to start camera service watchdog thread: %s (%d)",
@@ -612,10 +613,35 @@ status_t Camera3Device::dump(int fd, [[maybe_unused]] const Vector<String16> &ar
 
     {
         lines = "    Last request sent:\n";
+        LatestRequestInfo lastRequestInfo = getLatestRequestInfoLocked();
+        // Print out output and input stream ids
+        if (flags::dumpsys_request_stream_ids()) {
+            if (lastRequestInfo.outputStreamIds.size() != 0) {
+                lines += "      Output Stream Ids:\n";
+                for (const auto &streamId: lastRequestInfo.outputStreamIds) {
+                    lines +=  "         " + std::to_string(streamId) + "\n";
+                }
+            }
+            if (lastRequestInfo.inputStreamId != -1) {
+                lines += "       Input Stream Id: " + std::to_string(lastRequestInfo.inputStreamId)
+                        + "\n";
+            }
+        }
+        // Keeping this write() outside the flagged if makes it easier while
+        // removing the flag.
+        write(fd, lines.c_str(), lines.size());
+        lines = "    Logical request settings:\n";
+        CameraMetadata lastRequestSettings = lastRequestInfo.requestSettings;
         write(fd, lines.c_str(), lines.size());
 
-        CameraMetadata lastRequest = getLatestRequestLocked();
-        lastRequest.dump(fd, /*verbosity*/2, /*indentation*/6);
+        lastRequestSettings.dump(fd, /*verbosity=all info*/2, /*indentation*/6);
+        if (flags::dumpsys_request_stream_ids()) {
+            for (const auto& pair: lastRequestInfo.physicalRequestSettings) {
+                lines = "    Physical request settings for camera id " + pair.first + ":\n";
+                write(fd, lines.c_str(), lines.size());
+                pair.second.dump(fd, /*verbosity=all info*/2, /*indentation*/8);
+            }
+        }
     }
 
     if (dumpTemplates) {
@@ -720,7 +746,7 @@ status_t Camera3Device::checkStatusOkToCaptureLocked() {
 
 status_t Camera3Device::convertMetadataListToRequestListLocked(
         const List<const PhysicalCameraSettingsList> &metadataList,
-        const std::list<const SurfaceMap> &surfaceMaps,
+        const std::list<SurfaceMap> &surfaceMaps,
         bool repeating, nsecs_t requestTimeNs,
         RequestList *requestList) {
     if (requestList == NULL) {
@@ -730,7 +756,7 @@ status_t Camera3Device::convertMetadataListToRequestListLocked(
 
     int32_t burstId = 0;
     List<const PhysicalCameraSettingsList>::const_iterator metadataIt = metadataList.begin();
-    std::list<const SurfaceMap>::const_iterator surfaceMapIt = surfaceMaps.begin();
+    std::list<SurfaceMap>::const_iterator surfaceMapIt = surfaceMaps.begin();
     for (; metadataIt != metadataList.end() && surfaceMapIt != surfaceMaps.end();
             ++metadataIt, ++surfaceMapIt) {
         sp<CaptureRequest> newRequest = setUpRequestLocked(*metadataIt, *surfaceMapIt);
@@ -778,14 +804,14 @@ status_t Camera3Device::capture(CameraMetadata &request, int64_t* lastFrameNumbe
     ATRACE_CALL();
 
     List<const PhysicalCameraSettingsList> requestsList;
-    std::list<const SurfaceMap> surfaceMaps;
+    std::list<SurfaceMap> surfaceMaps;
     convertToRequestList(requestsList, surfaceMaps, request);
 
     return captureList(requestsList, surfaceMaps, lastFrameNumber);
 }
 
 void Camera3Device::convertToRequestList(List<const PhysicalCameraSettingsList>& requestsList,
-        std::list<const SurfaceMap>& surfaceMaps,
+        std::list<SurfaceMap>& surfaceMaps,
         const CameraMetadata& request) {
     PhysicalCameraSettingsList requestList;
     requestList.push_back({getId(), request});
@@ -803,7 +829,7 @@ void Camera3Device::convertToRequestList(List<const PhysicalCameraSettingsList>&
 
 status_t Camera3Device::submitRequestsHelper(
         const List<const PhysicalCameraSettingsList> &requests,
-        const std::list<const SurfaceMap> &surfaceMaps,
+        const std::list<SurfaceMap> &surfaceMaps,
         bool repeating,
         /*out*/
         int64_t *lastFrameNumber) {
@@ -851,7 +877,7 @@ status_t Camera3Device::submitRequestsHelper(
 }
 
 status_t Camera3Device::captureList(const List<const PhysicalCameraSettingsList> &requestsList,
-                                    const std::list<const SurfaceMap> &surfaceMaps,
+                                    const std::list<SurfaceMap> &surfaceMaps,
                                     int64_t *lastFrameNumber) {
     ATRACE_CALL();
 
@@ -863,7 +889,7 @@ status_t Camera3Device::setStreamingRequest(const CameraMetadata &request,
     ATRACE_CALL();
 
     List<const PhysicalCameraSettingsList> requestsList;
-    std::list<const SurfaceMap> surfaceMaps;
+    std::list<SurfaceMap> surfaceMaps;
     convertToRequestList(requestsList, surfaceMaps, request);
 
     return setStreamingRequestList(requestsList, /*surfaceMap*/surfaceMaps,
@@ -872,7 +898,7 @@ status_t Camera3Device::setStreamingRequest(const CameraMetadata &request,
 
 status_t Camera3Device::setStreamingRequestList(
         const List<const PhysicalCameraSettingsList> &requestsList,
-        const std::list<const SurfaceMap> &surfaceMaps, int64_t *lastFrameNumber) {
+        const std::list<SurfaceMap> &surfaceMaps, int64_t *lastFrameNumber) {
     ATRACE_CALL();
 
     return submitRequestsHelper(requestsList, surfaceMaps, /*repeating*/true, lastFrameNumber);
@@ -1415,6 +1441,21 @@ status_t Camera3Device::filterParamsAndConfigureLocked(const CameraMetadata& par
     return configureStreamsLocked(operatingMode, filteredParams);
 }
 
+#if WB_CAMERA3_AND_PROCESSORS_WITH_DEPENDENCIES
+status_t Camera3Device::getInputSurface(sp<Surface> *surface) {
+    ATRACE_CALL();
+    Mutex::Autolock il(mInterfaceLock);
+    Mutex::Autolock l(mLock);
+
+    if (surface == NULL) {
+        return BAD_VALUE;
+    } else if (mInputStream == NULL) {
+        return INVALID_OPERATION;
+    }
+
+    return mInputStream->getInputSurface(surface);
+}
+#else
 status_t Camera3Device::getInputBufferProducer(
         sp<IGraphicBufferProducer> *producer) {
     ATRACE_CALL();
@@ -1429,6 +1470,7 @@ status_t Camera3Device::getInputBufferProducer(
 
     return mInputStream->getInputBufferProducer(producer);
 }
+#endif
 
 status_t Camera3Device::createDefaultRequest(camera_request_template_t templateId,
         CameraMetadata *request) {
@@ -1810,10 +1852,7 @@ status_t Camera3Device::flush(int64_t *frameNumber) {
         mSessionStatsBuilder.stopCounter();
     }
 
-    // Calculate expected duration for flush with additional buffer time in ms for watchdog
-    uint64_t maxExpectedDuration = ns2ms(getExpectedInFlightDuration() + kBaseGetBufferWait);
-    status_t res = mCameraServiceWatchdog->WATCH_CUSTOM_TIMER(mRequestThread->flush(),
-            maxExpectedDuration / kCycleLengthMs, kCycleLengthMs);
+    status_t res = mCameraServiceWatchdog->WATCH(mRequestThread->flush());
 
     return res;
 }
@@ -2911,13 +2950,13 @@ void Camera3Device::flushInflightRequests() {
     camera3::flushInflightRequests(states);
 }
 
-CameraMetadata Camera3Device::getLatestRequestLocked() {
+Camera3Device::LatestRequestInfo Camera3Device::getLatestRequestInfoLocked() {
     ALOGV("%s", __FUNCTION__);
 
-    CameraMetadata retVal;
+    LatestRequestInfo retVal;
 
     if (mRequestThread != NULL) {
-        retVal = mRequestThread->getLatestRequest();
+        retVal = mRequestThread->getLatestRequestInfo();
     }
 
     return retVal;
@@ -3487,30 +3526,40 @@ void Camera3Device::RequestThread::updateNextRequest(NextRequest& nextRequest) {
     if (halRequest.settings != nullptr) { // Don't update if they were unchanged
         Mutex::Autolock al(mLatestRequestMutex);
 
-        camera_metadata_t* cloned = clone_camera_metadata(halRequest.settings);
-        mLatestRequest.acquire(cloned);
+        // Fill in latest request and physical request
+        camera_metadata_t *cloned = clone_camera_metadata(halRequest.settings);
+        mLatestRequestInfo.requestSettings.acquire(cloned);
 
-        mLatestPhysicalRequest.clear();
+        mLatestRequestInfo.physicalRequestSettings.clear();
+        mLatestRequestInfo.outputStreamIds.clear();
         for (uint32_t i = 0; i < halRequest.num_physcam_settings; i++) {
             cloned = clone_camera_metadata(halRequest.physcam_settings[i]);
-            mLatestPhysicalRequest.emplace(halRequest.physcam_id[i],
-                    CameraMetadata(cloned));
+            mLatestRequestInfo.physicalRequestSettings.emplace(halRequest.physcam_id[i],
+                                           CameraMetadata(cloned));
         }
 
         if (parent != nullptr) {
             int32_t inputStreamId = -1;
             if (halRequest.input_buffer != nullptr) {
               inputStreamId = Camera3Stream::cast(halRequest.input_buffer->stream)->getId();
+              mLatestRequestInfo.inputStreamId = inputStreamId;
             }
+
+           for (size_t i = 0; i < halRequest.num_output_buffers; i++) {
+               int32_t outputStreamId =
+                       Camera3Stream::cast(halRequest.output_buffers[i].stream)->getId();
+               mLatestRequestInfo.outputStreamIds.emplace(outputStreamId);
+           }
 
             parent->monitorMetadata(TagMonitor::REQUEST,
                     halRequest.frame_number,
-                    0, mLatestRequest, mLatestPhysicalRequest, halRequest.output_buffers,
+                    0, mLatestRequestInfo.requestSettings,
+                    mLatestRequestInfo.physicalRequestSettings, halRequest.output_buffers,
                     halRequest.num_output_buffers, inputStreamId);
         }
     }
     if (parent != nullptr) {
-        parent->collectRequestStats(halRequest.frame_number, mLatestRequest);
+        parent->collectRequestStats(halRequest.frame_number, mLatestRequestInfo.requestSettings);
     }
 
     if (halRequest.settings != nullptr) {
@@ -4170,13 +4219,13 @@ status_t Camera3Device::RequestThread::prepareHalRequests() {
     return OK;
 }
 
-CameraMetadata Camera3Device::RequestThread::getLatestRequest() const {
+Camera3Device::LatestRequestInfo Camera3Device::RequestThread::getLatestRequestInfo() const {
     ATRACE_CALL();
     Mutex::Autolock al(mLatestRequestMutex);
 
     ALOGV("RequestThread::%s", __FUNCTION__);
 
-    return mLatestRequest;
+    return mLatestRequestInfo;
 }
 
 bool Camera3Device::RequestThread::isStreamPending(

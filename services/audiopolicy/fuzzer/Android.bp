@@ -28,39 +28,18 @@ package {
 
 cc_fuzz {
     name: "audiopolicy_fuzzer",
+    defaults: [
+        "libaudiopolicyservice_dependencies",
+    ],
     srcs: [
         "audiopolicy_fuzzer.cpp",
-    ],
-    include_dirs: [
-        "frameworks/av/services/audiopolicy",
-    ],
-    shared_libs: [
-        "android.hardware.audio.common-util",
-        "capture_state_listener-aidl-cpp",
-        "framework-permission-aidl-cpp",
-        "libaudioclient",
-        "libaudiofoundation",
-        "libaudiopolicy",
-        "libaudiopolicycomponents",
-        "libaudiopolicymanagerdefault",
-        "libbase",
-        "libbinder",
-        "libcutils",
-        "libdl",
-        "libhidlbase",
-        "liblog",
-        "libmedia_helper",
-        "libmediametrics",
-        "libutils",
-        "libxml2",
     ],
     static_libs: [
         "android.hardware.audio.common@7.0-enums",
     ],
-    header_libs: [
-        "libaudiopolicycommon",
-        "libaudiopolicyengine_interface_headers",
-        "libaudiopolicymanager_interface_headers",
+    include_dirs: [
+        "frameworks/av/services/audiopolicy", // include path outside of libaudiopolicyservice
+        "frameworks/av/services/audiopolicy/engine/interface", // for /tests/AudioPolicyTestManager.h:
     ],
     data: [":audiopolicyfuzzer_configuration_files"],
     fuzz_config: {

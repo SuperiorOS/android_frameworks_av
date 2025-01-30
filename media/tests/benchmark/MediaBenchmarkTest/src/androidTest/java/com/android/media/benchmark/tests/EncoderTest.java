@@ -50,6 +50,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
@@ -150,7 +151,7 @@ public class EncoderTest {
     }
 
     @BeforeClass
-    public static void prepareInput() throws IOException {
+    public static void prepareInput() throws IOException, InterruptedException {
 
         mDecodedFileFullHd = new File(mFileDirPath + DECODE_FULLHD_UNPACKED);
         int status = decodeFile(mInputFilePath + DECODE_FULLHD_INPUT, mDecodedFileFullHd);
@@ -165,7 +166,8 @@ public class EncoderTest {
         assertEquals("Decoder returned error " + status, 0, status);
     }
 
-    private static int decodeFile(String inputFileName, File outputDecodeFile) throws IOException {
+    private static int decodeFile(String inputFileName, File outputDecodeFile)
+            throws IOException, InterruptedException {
         int status = -1;
         File inputFile = new File(inputFileName);
         assertTrue("Cannot open input file " + inputFileName, inputFile.exists());
@@ -220,7 +222,7 @@ public class EncoderTest {
         int status;
         int frameSize;
 
-        ArrayList<String> mediaCodecs = CodecUtils.selectCodecs(mMime, true);
+        List<String> mediaCodecs = CodecUtils.selectCodecs(mMime, true);
         assertTrue("No suitable codecs found for mimetype: " + mMime, (mediaCodecs.size() > 0));
         Boolean[] encodeMode = {true, false};
         // Encoding the decoded input file
@@ -297,7 +299,7 @@ public class EncoderTest {
 
     @Test(timeout = PER_TEST_TIMEOUT_MS)
     public void testNativeEncoder() {
-        ArrayList<String> mediaCodecs = CodecUtils.selectCodecs(mMime, true);
+        List<String> mediaCodecs = CodecUtils.selectCodecs(mMime, true);
         assertTrue("No suitable codecs found for mimetype: " + mMime, (mediaCodecs.size() > 0));
         for (String codecName : mediaCodecs) {
             Native nativeEncoder = new Native();

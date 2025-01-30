@@ -29,6 +29,7 @@ cc_test {
         "CameraCharacteristicsPermission.cpp",
     ],
     shared_libs: [
+        "framework-permission-aidl-cpp",
         "liblog",
         "libutils",
         "libcutils",

@@ -18,9 +18,10 @@
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 //#define LOG_NDEBUG 0
 
+#include <com_android_graphics_libgui_flags.h>
+#include <gui/Surface.h>
 #include <utils/Log.h>
 #include <utils/Trace.h>
-#include <gui/Surface.h>
 
 #include "common/CameraDeviceBase.h"
 #include "api1/Camera2Client.h"
@@ -113,6 +114,12 @@ status_t CallbackProcessor::updateStream(const Parameters &params) {
     if (!mCallbackToApp && mCallbackConsumer == 0) {
         // Create CPU buffer queue endpoint, since app hasn't given us one
         // Make it async to avoid disconnect deadlocks
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+        mCallbackConsumer = new CpuConsumer(kCallbackHeapCount);
+        mCallbackConsumer->setFrameAvailableListener(this);
+        mCallbackConsumer->setName(String8("Camera2-CallbackConsumer"));
+        mCallbackWindow = mCallbackConsumer->getSurface();
+#else
         sp<IGraphicBufferProducer> producer;
         sp<IGraphicBufferConsumer> consumer;
         BufferQueue::createBufferQueue(&producer, &consumer);
@@ -120,6 +127,7 @@ status_t CallbackProcessor::updateStream(const Parameters &params) {
         mCallbackConsumer->setFrameAvailableListener(this);
         mCallbackConsumer->setName(String8("Camera2-CallbackConsumer"));
         mCallbackWindow = new Surface(producer);
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
     }
 
     if (mCallbackStreamId != NO_STREAM) {

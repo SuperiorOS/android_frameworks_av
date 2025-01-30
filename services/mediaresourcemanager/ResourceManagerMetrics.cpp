@@ -821,7 +821,7 @@ std::string ResourceManagerMetrics::dump() const {
     metricsLog += getAppsPixelCount(mProcessPixelsMap);
     metricsLog += getAppsCodecUsageMetrics(mProcessConcurrentCodecsMap);
 
-    return std::move(metricsLog);
+    return metricsLog;
 }
 
 } // namespace android

@@ -29,9 +29,7 @@
 #include <android/content/AttributionSourceState.h>
 #include <android/sysprop/BluetoothProperties.sysprop.h>
 #include <audio_utils/fixedfft.h>
-#include <com_android_media_audio.h>
 #include <cutils/bitops.h>
-#include <cutils/properties.h>
 #include <hardware/sensors.h>
 #include <media/stagefright/foundation/AHandler.h>
 #include <media/stagefright/foundation/AMessage.h>
@@ -43,6 +41,7 @@
 #include <utils/Thread.h>
 
 #include "Spatializer.h"
+#include "SpatializerHelper.h"
 
 namespace android {
 
@@ -398,12 +397,10 @@ status_t Spatializer::loadEngineConfiguration(sp<EffectHalInterface> effect) {
         return status;
     }
     for (const auto channelMask : channelMasks) {
-        static const bool stereo_spatialization_enabled =
-                property_get_bool("ro.audio.stereo_spatialization_enabled", false);
         const bool channel_mask_spatialized =
-                (stereo_spatialization_enabled && com_android_media_audio_stereo_spatialization())
-                ? audio_channel_mask_contains_stereo(channelMask)
-                : audio_is_channel_mask_spatialized(channelMask);
+                SpatializerHelper::isStereoSpatializationFeatureEnabled()
+                        ? audio_channel_mask_contains_stereo(channelMask)
+                        : audio_is_channel_mask_spatialized(channelMask);
         if (!channel_mask_spatialized) {
             ALOGW("%s: ignoring channelMask:%#x", __func__, channelMask);
             continue;
@@ -936,7 +933,8 @@ void Spatializer::sortSupportedLatencyModes_l() {
             });
 }
 
-status_t Spatializer::attachOutput(audio_io_handle_t output, size_t numActiveTracks) {
+status_t Spatializer::attachOutput(audio_io_handle_t output,
+          const std::vector<audio_channel_mask_t>& activeTracksMasks) {
     bool outputChanged = false;
     sp<media::INativeSpatializerCallback> callback;
 
@@ -944,7 +942,7 @@ status_t Spatializer::attachOutput(audio_io_handle_t output, size_t numActiveTra
         audio_utils::lock_guard lock(mMutex);
         ALOGV("%s output %d mOutput %d", __func__, (int)output, (int)mOutput);
         mLocalLog.log("%s with output %d tracks %zu (mOutput %d)", __func__, (int)output,
-                      numActiveTracks, (int)mOutput);
+                      activeTracksMasks.size(), (int)mOutput);
         if (mOutput != AUDIO_IO_HANDLE_NONE) {
             LOG_ALWAYS_FATAL_IF(mEngine == nullptr, "%s output set without FX engine", __func__);
             // remove FX instance
@@ -969,7 +967,7 @@ status_t Spatializer::attachOutput(audio_io_handle_t output, size_t numActiveTra
 
         outputChanged = mOutput != output;
         mOutput = output;
-        mNumActiveTracks = numActiveTracks;
+        mActiveTracksMasks = activeTracksMasks;
         AudioSystem::addSupportedLatencyModesCallback(this);
 
         std::vector<audio_latency_mode_t> latencyModes;
@@ -1008,7 +1006,8 @@ audio_io_handle_t Spatializer::detachOutput() {
 
     {
         audio_utils::lock_guard lock(mMutex);
-        mLocalLog.log("%s with output %d tracks %zu", __func__, (int)mOutput, mNumActiveTracks);
+        mLocalLog.log("%s with output %d num tracks %zu",
+            __func__, (int)mOutput, mActiveTracksMasks.size());
         ALOGV("%s mOutput %d", __func__, (int)mOutput);
         if (mOutput == AUDIO_IO_HANDLE_NONE) {
             return output;
@@ -1051,11 +1050,13 @@ void Spatializer::onSupportedLatencyModesChangedMsg(
     }
 }
 
-void Spatializer::updateActiveTracks(size_t numActiveTracks) {
+void Spatializer::updateActiveTracks(
+        const std::vector<audio_channel_mask_t>& activeTracksMasks) {
     audio_utils::lock_guard lock(mMutex);
-    if (mNumActiveTracks != numActiveTracks) {
-        mLocalLog.log("%s from %zu to %zu", __func__, mNumActiveTracks, numActiveTracks);
-        mNumActiveTracks = numActiveTracks;
+    if (mActiveTracksMasks != activeTracksMasks) {
+        mLocalLog.log("%s from %zu to %zu",
+                __func__, mActiveTracksMasks.size(), activeTracksMasks.size());
+        mActiveTracksMasks = activeTracksMasks;
         checkEngineState_l();
         checkSensorsState_l();
     }
@@ -1114,7 +1115,7 @@ void Spatializer::checkSensorsState_l() {
         if (mPoseController != nullptr) {
             // TODO(b/253297301, b/255433067) reenable low latency condition check
             // for Head Tracking after Bluetooth HAL supports it correctly.
-            if (mNumActiveTracks > 0 && mLevel != Spatialization::Level::NONE
+            if (shouldUseHeadTracking_l() && mLevel != Spatialization::Level::NONE
                     && mDesiredHeadTrackingMode != HeadTrackingMode::STATIC
                     && mHeadSensor != SpatializerPoseController::INVALID_SENSOR) {
                 if (supportsLowLatencyMode) {
@@ -1146,9 +1147,28 @@ void Spatializer::checkSensorsState_l() {
     }
 }
 
+
+/* static */
+bool Spatializer::containsImmersiveChannelMask(
+        const std::vector<audio_channel_mask_t>& masks)
+{
+    for (auto mask : masks) {
+        if (audio_is_channel_mask_spatialized(mask)) {
+            return true;
+        }
+    }
+    // Only non-immersive channel masks, e.g. AUDIO_CHANNEL_OUT_STEREO, are present.
+    return false;
+}
+
+bool Spatializer::shouldUseHeadTracking_l() const {
+    // Headtracking only available on immersive channel masks.
+    return containsImmersiveChannelMask(mActiveTracksMasks);
+}
+
 void Spatializer::checkEngineState_l() {
     if (mEngine != nullptr) {
-        if (mLevel != Spatialization::Level::NONE && mNumActiveTracks > 0) {
+        if (mLevel != Spatialization::Level::NONE && mActiveTracksMasks.size() > 0) {
             mEngine->setEnabled(true);
             setEffectParameter_l(SPATIALIZER_PARAM_LEVEL,
                     std::vector<Spatialization::Level>{mLevel});
@@ -1237,7 +1257,8 @@ std::string Spatializer::toString(unsigned level) const {
     base::StringAppendF(&ss, "\n%smSupportsHeadTracking: %s\n", prefixSpace.c_str(),
                         mSupportsHeadTracking ? "true" : "false");
     // 2. Settings (Output, tracks)
-    base::StringAppendF(&ss, "%smNumActiveTracks: %zu\n", prefixSpace.c_str(), mNumActiveTracks);
+    base::StringAppendF(&ss, "%sNum Active Tracks: %zu\n",
+            prefixSpace.c_str(), mActiveTracksMasks.size());
     base::StringAppendF(&ss, "%sOutputStreamHandle: %d\n", prefixSpace.c_str(), (int)mOutput);
 
     // 3. Sensors, Effect information.
@@ -1248,8 +1269,9 @@ std::string Spatializer::toString(unsigned level) const {
                         mDisplayOrientation);
 
     // 4. Show flag or property state.
-    base::StringAppendF(&ss, "%sStereo Spatialization: %s\n", prefixSpace.c_str(),
-            com_android_media_audio_stereo_spatialization() ? "true" : "false");
+    base::StringAppendF(
+            &ss, "%sStereo Spatialization: %s\n", prefixSpace.c_str(),
+            SpatializerHelper::isStereoSpatializationFeatureEnabled() ? "true" : "false");
 
     ss.append(prefixSpace + "CommandLog:\n");
     ss += mLocalLog.dumpToString((prefixSpace + " ").c_str(), mMaxLocalLogLine);

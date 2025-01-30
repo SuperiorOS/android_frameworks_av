@@ -154,6 +154,9 @@ TEST(mixerops, stereovolume_7) {
 TEST(mixerops, stereovolume_8) {
     MixerOpsBasicTest<MIXTYPE_MULTI_STEREOVOL, 8>::testStereoVolume();
 }
+TEST(mixerops, stereovolume_10) {
+    MixerOpsBasicTest<MIXTYPE_MULTI_STEREOVOL, 10>::testStereoVolume();
+}
 TEST(mixerops, stereovolume_12) {
     if constexpr (FCC_LIMIT >= 12) { // NOTE: FCC_LIMIT is an enum, so can't #if
         MixerOpsBasicTest<MIXTYPE_MULTI_STEREOVOL, 12>::testStereoVolume();

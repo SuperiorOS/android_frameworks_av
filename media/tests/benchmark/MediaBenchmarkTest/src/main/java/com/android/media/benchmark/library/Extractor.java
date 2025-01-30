@@ -76,6 +76,21 @@ public class Extractor {
     public MediaCodec.BufferInfo getBufferInfo() { return this.mBufferInfo; }
 
     /**
+     * Returns the maximum sample size for the selected track
+     * @return max sample size in the given track
+     */
+    public int getMaxSampleSize() {
+        int size = 0;
+        int maxSampleSize = 0;
+        while ((size = (int) mExtractor.getSampleSize()) != -1) {
+            maxSampleSize = Math.max(maxSampleSize, size);
+            mExtractor.advance();
+        }
+        mExtractor.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC);
+        return maxSampleSize;
+    }
+
+    /**
      * Returns the duration of the sample
      */
     public long getClipDuration() { return this.mDurationUs; }

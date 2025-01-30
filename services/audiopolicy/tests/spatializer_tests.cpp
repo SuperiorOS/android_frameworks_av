@@ -33,6 +33,38 @@ using namespace android;
 using media::audio::common::HeadTracking;
 using media::audio::common::Spatialization;
 
+// Test Spatializer Helper Methods
+
+TEST(Spatializer, containsImmersiveChannelMask) {
+    // Regardless of the implementation, we expect the following
+    // behavior.
+
+    // Pure non-immersive
+    EXPECT_FALSE(Spatializer::containsImmersiveChannelMask(
+            { AUDIO_CHANNEL_OUT_STEREO }));
+    EXPECT_FALSE(Spatializer::containsImmersiveChannelMask(
+            { AUDIO_CHANNEL_OUT_MONO, AUDIO_CHANNEL_OUT_STEREO }));
+    EXPECT_FALSE(Spatializer::containsImmersiveChannelMask(
+            { AUDIO_CHANNEL_OUT_MONO, AUDIO_CHANNEL_OUT_STEREO,
+              AUDIO_CHANNEL_OUT_STEREO, AUDIO_CHANNEL_OUT_MONO }));
+
+    // Pure immersive
+    EXPECT_TRUE(Spatializer::containsImmersiveChannelMask(
+            { AUDIO_CHANNEL_OUT_5POINT1 }));
+    EXPECT_TRUE(Spatializer::containsImmersiveChannelMask(
+            { AUDIO_CHANNEL_OUT_7POINT1 }));
+    EXPECT_TRUE(Spatializer::containsImmersiveChannelMask(
+            { AUDIO_CHANNEL_OUT_5POINT1, AUDIO_CHANNEL_OUT_7POINT1,
+              AUDIO_CHANNEL_OUT_22POINT2 }));
+
+    // Mixed immersive/non-immersive
+    EXPECT_TRUE(Spatializer::containsImmersiveChannelMask(
+            { AUDIO_CHANNEL_OUT_MONO, AUDIO_CHANNEL_OUT_7POINT1POINT4 }));
+    EXPECT_TRUE(Spatializer::containsImmersiveChannelMask(
+            { AUDIO_CHANNEL_OUT_MONO, AUDIO_CHANNEL_OUT_STEREO,
+              AUDIO_CHANNEL_OUT_7POINT1 }));
+}
+
 class TestSpatializerPolicyCallback :
         public SpatializerPolicyCallback {
 public:
@@ -68,7 +100,7 @@ protected:
         mSpatializer->setOutput(AUDIO_IO_HANDLE_NONE);
         mSpatializer->setDesiredHeadTrackingMode(HeadTracking::Mode::DISABLED);
         mSpatializer->setHeadSensor(SpatializerPoseController::INVALID_SENSOR);
-        mSpatializer->updateActiveTracks(0);
+        mSpatializer->updateActiveTracks({});
     }
 
     static constexpr audio_io_handle_t sTestOutput= 1977;
@@ -174,12 +206,12 @@ TEST_F(SpatializerTest, RequestedA2dpLatencyTest) {
     ASSERT_EQ(requestedLatencyMode, AUDIO_LATENCY_MODE_FREE);
 
     // requested latency mode must be low if at least one spatialized tracks is active
-    mSpatializer->updateActiveTracks(1);
+    mSpatializer->updateActiveTracks({AUDIO_CHANNEL_OUT_5POINT1});
     requestedLatencyMode = mSpatializer->getRequestedLatencyMode();
     ASSERT_EQ(requestedLatencyMode, AUDIO_LATENCY_MODE_LOW);
 
     // requested latency mode must be free after stopping the last spatialized tracks
-    mSpatializer->updateActiveTracks(0);
+    mSpatializer->updateActiveTracks({});
     requestedLatencyMode = mSpatializer->getRequestedLatencyMode();
     ASSERT_EQ(requestedLatencyMode, AUDIO_LATENCY_MODE_FREE);
 }
@@ -202,7 +234,7 @@ TEST_F(SpatializerTest, RequestedBleLatencyTest) {
 
     // requested latency mode must be low software if at least one spatialized tracks is active
     // and the only supported low latency mode is low software
-    mSpatializer->updateActiveTracks(1);
+    mSpatializer->updateActiveTracks({AUDIO_CHANNEL_OUT_5POINT1});
     requestedLatencyMode = mSpatializer->getRequestedLatencyMode();
     ASSERT_EQ(requestedLatencyMode, AUDIO_LATENCY_MODE_DYNAMIC_SPATIAL_AUDIO_SOFTWARE);
 
@@ -225,7 +257,7 @@ TEST_F(SpatializerTest, RequestedBleLatencyTest) {
     }
 
     // requested latency mode must be free after stopping the last spatialized tracks
-    mSpatializer->updateActiveTracks(0);
+    mSpatializer->updateActiveTracks({});
     requestedLatencyMode = mSpatializer->getRequestedLatencyMode();
     ASSERT_EQ(requestedLatencyMode, AUDIO_LATENCY_MODE_FREE);
 }

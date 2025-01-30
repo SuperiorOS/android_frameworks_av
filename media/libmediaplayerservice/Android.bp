@@ -47,6 +47,7 @@ cc_defaults {
         "android.hardware.media.omx@1.0",
         "av-types-aidl-cpp",
         "framework-permission-aidl-cpp",
+        "libaconfig_storage_read_api_cc",
         "libaudioclient_aidl_conversion",
         "libbase",
         "libbinder_ndk",
@@ -79,6 +80,7 @@ cc_defaults {
         "libstagefright_httplive",
         "libutils",
         "packagemanager_aidl-cpp",
+        "server_configurable_flags",
     ],
 
     header_libs: [
@@ -89,6 +91,7 @@ cc_defaults {
     ],
 
     static_libs: [
+        "com.android.media.flags.editing-aconfig-cc",
         "libplayerservice_datasource",
         "libstagefright_nuplayer",
         "libstagefright_rtsp",

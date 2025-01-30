@@ -23,6 +23,7 @@
 #include "device3/aidl/AidlCamera3Device.h"
 #include "device3/hidl/HidlCamera3Device.h"
 #include "device3/Camera3OutputStream.h"
+#include "utils/Utils.h"
 
 using android::camera3::OutputStreamInfo;
 using android::hardware::camera2::ICameraDeviceUser;
@@ -48,16 +49,16 @@ convertAidlToHidl37StreamCombination(
     hidl.streams.resize(aidl.streams.size());
     size_t i = 0;
     for (const auto &stream : aidl.streams) {
-        if (static_cast<int>(stream.dynamicRangeProfile) !=
+        if (eToI(stream.dynamicRangeProfile) !=
                 ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD) {
             ALOGE("%s Dynamic range profile %" PRId64 " not supported by HIDL", __FUNCTION__,
-                    stream.dynamicRangeProfile);
+                    eToI(stream.dynamicRangeProfile));
             return BAD_VALUE;
         }
 
-        if (static_cast<int>(stream.useCase) != ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT) {
+        if (eToI(stream.useCase) != ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT) {
             ALOGE("%s Stream use case %" PRId64 "not supported by HIDL", __FUNCTION__,
-                    stream.useCase);
+                    eToI(stream.useCase));
             return BAD_VALUE;
         }
 

@@ -233,8 +233,7 @@ public:
      * FIXME This API assumes a route, and so should be deprecated.
      */
 
-    static status_t getMinFrameCount(size_t* frameCount,
-                                     audio_stream_type_t streamType,
+    static status_t getMinFrameCount(size_t* frameCount, audio_stream_type_t streamType,
                                      uint32_t sampleRate);
 
     /* Check if direct playback is possible for the given audio configuration and attributes.
@@ -242,6 +241,11 @@ public:
      */
     static bool isDirectOutputSupported(const audio_config_base_t& config,
                                         const audio_attributes_t& attributes);
+
+    /* Checks for erroneous status, logs the error message.
+     * Updates and returns mStatus.
+     */
+    status_t logIfErrorAndReturnStatus(status_t status, const std::string& errorMessage);
 
     /* How data is transferred to AudioTrack
      */

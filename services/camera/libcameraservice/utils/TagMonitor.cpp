@@ -384,7 +384,7 @@ std::string TagMonitor::getEventDataString(const uint8_t* data_ptr, uint32_t tag
         }
         returnStr << "]\n";
     }
-    return std::move(returnStr.str());
+    return returnStr.str();
 }
 
 template<typename T>

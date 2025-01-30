@@ -58,6 +58,7 @@ class PreviewFrameSpacer : public Thread {
 
     bool threadLoop() override;
     void requestExit() override;
+    status_t run(const char* name, int32_t priority = PRIORITY_DEFAULT, size_t stack = 0) override;
 
   private:
     // structure holding cached preview buffer info

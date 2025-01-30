@@ -45,8 +45,8 @@ class PreProcessingContext final : public EffectContext {
 
     PreProcessingEffectType getPreProcessingType() const { return mType; }
 
-    RetCode enable();
-    RetCode disable();
+    RetCode enable() override;
+    RetCode disable() override;
 
     RetCode setCommon(const Parameter::Common& common) override;
     void updateConfigs(const Parameter::Common& common);

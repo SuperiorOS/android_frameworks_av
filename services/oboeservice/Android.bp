@@ -84,6 +84,7 @@ cc_defaults {
     shared_libs: [
         "aaudio-aidl-cpp",
         "com.android.media.aaudio-aconfig-cc",
+        "com.android.media.aaudio-aconfig-cc",
         "framework-permission-aidl-cpp",
         "libaaudio_internal",
         "libaudioclient",
@@ -156,6 +157,8 @@ cc_library_static {
         "frameworks/av/media/libnbaio/include",
         "frameworks/av/media/libnbaio/include_mono",
     ],
+
+    export_include_dirs: ["."],
 
     tidy: true,
     tidy_checks: tidy_errors,

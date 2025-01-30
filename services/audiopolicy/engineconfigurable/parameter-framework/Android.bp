@@ -50,6 +50,7 @@ prebuilt_etc {
 genrule {
     name: "buildcommontypesstructure_gen",
     defaults: ["buildcommontypesstructurerule"],
+    out: ["PolicySubsystem-CommonTypes.xml"],
 }
 
 filegroup {

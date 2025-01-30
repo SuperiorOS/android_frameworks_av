@@ -17,32 +17,12 @@
 #define LOG_TAG "Codec2-GraphicBufferAllocator"
 
 
-#include <gui/IProducerListener.h>
 #include <media/stagefright/foundation/ADebug.h>
 
 #include <codec2/aidl/GraphicBufferAllocator.h>
 #include <codec2/aidl/GraphicsTracker.h>
 
 namespace aidl::android::hardware::media::c2::implementation {
-
-class OnBufferReleasedListener : public ::android::BnProducerListener {
-private:
-    uint32_t mGeneration;
-    std::weak_ptr<GraphicBufferAllocator> mAllocator;
-public:
-    OnBufferReleasedListener(
-            uint32_t generation,
-            const std::shared_ptr<GraphicBufferAllocator> &allocator)
-            : mGeneration(generation), mAllocator(allocator) {}
-    virtual ~OnBufferReleasedListener() = default;
-    virtual void onBufferReleased() {
-        auto p = mAllocator.lock();
-        if (p) {
-            p->onBufferReleased(mGeneration);
-        }
-    }
-    virtual bool needsReleaseNotify() { return true; }
-};
 
 ::ndk::ScopedAStatus GraphicBufferAllocator::allocate(
         const IGraphicBufferAllocator::Description& in_desc,
@@ -108,13 +88,12 @@ void GraphicBufferAllocator::reset() {
     mGraphicsTracker->stop();
 }
 
-const ::android::sp<::android::IProducerListener> GraphicBufferAllocator::createReleaseListener(
-      uint32_t generation) {
-    return new OnBufferReleasedListener(generation, ref<GraphicBufferAllocator>());
-}
-
 void GraphicBufferAllocator::onBufferReleased(uint32_t generation) {
     mGraphicsTracker->onReleased(generation);
+}
+
+void GraphicBufferAllocator::onBufferAttached(uint32_t generation) {
+    mGraphicsTracker->onAttached(generation);
 }
 
 c2_status_t GraphicBufferAllocator::allocate(

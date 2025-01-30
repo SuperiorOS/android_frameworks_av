@@ -32,9 +32,16 @@ package {
 cc_defaults {
     name: "camera_service_fuzzer_defaults",
     header_libs: [
+        "libaudioflinger_headers",
+        "libaudiohal_headers",
+        "libaudioutils_headers",
+        "libbinder_headers",
         "libmedia_headers",
+        "libmediautils_headers",
+        "mediautils_headers",
     ],
     shared_libs: [
+        "framework-permission-aidl-cpp",
         "libbinder",
         "libbase",
         "libutils",
@@ -58,7 +65,22 @@ cc_defaults {
         "android.hardware.camera.device@3.6",
         "android.hardware.camera.device@3.7",
         "camera_platform_flags_c_lib",
+        "libactivitymanager_aidl",
+        "libaudioclient",
+        "libaudioflinger",
+        "libaudiohal",
+        "libaudioprocessing",
+        "libmediaplayerservice",
+        "libmediautils",
+        "libnbaio",
+        "libnblog",
+        "libpermission",
+        "libpowermanager",
+        "libsensorprivacy",
+        "libvibrator",
+        "packagemanager_aidl-cpp",
     ],
+    static_libs: ["libbinder_random_parcel"],
     fuzz_config: {
         cc: [
             "android-camera-fwk-eng@google.com",
@@ -84,8 +106,11 @@ cc_fuzz {
     srcs: [
         "camera_service_fuzzer.cpp",
     ],
+    static_libs: [
+        "libfakeservicemanager",
+    ],
     defaults: [
-        "camera_service_fuzzer_defaults"
+        "camera_service_fuzzer_defaults",
     ],
 }
 

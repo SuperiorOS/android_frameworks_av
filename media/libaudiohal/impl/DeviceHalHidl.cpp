@@ -259,7 +259,8 @@ status_t DeviceHalHidl::openOutputStream(
         audio_output_flags_t flags,
         struct audio_config *config,
         const char *address,
-        sp<StreamOutHalInterface> *outStream) {
+        sp<StreamOutHalInterface> *outStream,
+        const std::vector<playback_track_metadata_v7_t>& sourceMetadata) {
     TIME_CHECK();
     if (mDevice == 0) return NO_INIT;
     DeviceAddress hidlDevice;
@@ -272,6 +273,16 @@ status_t DeviceHalHidl::openOutputStream(
             status != OK) {
         return status;
     }
+
+#if MAJOR_VERSION == 4
+    ::android::hardware::audio::CORE_TYPES_CPP_VERSION::SourceMetadata hidlMetadata;
+#else
+    ::android::hardware::audio::common::COMMON_TYPES_CPP_VERSION::SourceMetadata hidlMetadata;
+#endif
+
+    RETURN_STATUS_IF_ERROR(CoreUtils::sourceMetadataFromHalV7(
+            sourceMetadata, true /*ignoreNonVendorTags*/, &hidlMetadata
+            ));
 
 #if !(MAJOR_VERSION == 7 && MINOR_VERSION == 1)
     //TODO: b/193496180 use spatializer flag at audio HAL when available
@@ -294,7 +305,7 @@ status_t DeviceHalHidl::openOutputStream(
 #endif
             handle, hidlDevice, hidlConfig, hidlFlags,
 #if MAJOR_VERSION >= 4
-            {} /* metadata */,
+            hidlMetadata /* metadata */,
 #endif
             [&](Result r, const sp<::android::hardware::audio::CPP_VERSION::IStreamOut>& result,
                     const AudioConfig& suggestedConfig) {

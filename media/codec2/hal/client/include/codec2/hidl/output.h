@@ -69,6 +69,9 @@ struct OutputBufferQueue {
     // update the number of dequeueable/allocatable buffers.
     void onBufferReleased(uint32_t generation);
 
+    // Nofify a buffer is attached to the output surface.
+    void onBufferAttached(uint32_t generation);
+
     // Retrieve frame event history from the output surface.
     void pollForRenderedFrames(FrameEventHistoryDelta* delta);
 
@@ -93,6 +96,7 @@ private:
     uint64_t mBqId;
     int32_t mMaxDequeueBufferCount;
     std::shared_ptr<int> mOwner;
+    std::shared_ptr<int> mConsumerAttachCount;
     // To migrate existing buffers
     sp<GraphicBuffer> mBuffers[BufferQueueDefs::NUM_BUFFER_SLOTS]; // find a better way
     std::weak_ptr<_C2BlockPoolData> mPoolDatas[BufferQueueDefs::NUM_BUFFER_SLOTS];

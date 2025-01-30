@@ -78,30 +78,30 @@ void generateDepth16Buffer(std::array<uint16_t, kTestBufferDepthSize> *depth16Bu
 }
 
 TEST(DepthProcessorTest, BadInput) {
+    static const size_t badInputBufferWidth = 17;
+    static const size_t badInputBufferHeight = 3;
+    static const size_t badInputJpegSize = 63;
+    static const size_t badInputBufferDepthSize = (badInputBufferWidth * badInputBufferHeight);
     int jpegQuality = 95;
 
     DepthPhotoInputFrame inputFrame;
+    std::vector<uint8_t> colorJpegBuffer(badInputJpegSize);
+    inputFrame.mMainJpegSize = colorJpegBuffer.size();
     // Worst case both depth and confidence maps have the same size as the main color image.
     inputFrame.mMaxJpegSize = inputFrame.mMainJpegSize * 3;
 
-    std::vector<uint8_t> colorJpegBuffer;
-    generateColorJpegBuffer(jpegQuality, ExifOrientation::ORIENTATION_UNDEFINED,
-            /*includeExif*/ false, /*switchDimensions*/ false, &colorJpegBuffer);
-
-    std::array<uint16_t, kTestBufferDepthSize> depth16Buffer;
-    generateDepth16Buffer(&depth16Buffer);
+    std::array<uint16_t, badInputBufferDepthSize> depth16Buffer;
 
     std::vector<uint8_t> depthPhotoBuffer(inputFrame.mMaxJpegSize);
     size_t actualDepthPhotoSize = 0;
 
-    inputFrame.mMainJpegWidth = kTestBufferWidth;
-    inputFrame.mMainJpegHeight = kTestBufferHeight;
+    inputFrame.mMainJpegWidth = badInputBufferWidth;
+    inputFrame.mMainJpegHeight = badInputBufferHeight;
     inputFrame.mJpegQuality = jpegQuality;
     ASSERT_NE(processDepthPhotoFrame(inputFrame, depthPhotoBuffer.size(), depthPhotoBuffer.data(),
                 &actualDepthPhotoSize), 0);
 
     inputFrame.mMainJpegBuffer = reinterpret_cast<const char*> (colorJpegBuffer.data());
-    inputFrame.mMainJpegSize = colorJpegBuffer.size();
     ASSERT_NE(processDepthPhotoFrame(inputFrame, depthPhotoBuffer.size(), depthPhotoBuffer.data(),
                 &actualDepthPhotoSize), 0);
 
@@ -113,6 +113,9 @@ TEST(DepthProcessorTest, BadInput) {
 
     ASSERT_NE(processDepthPhotoFrame(inputFrame, depthPhotoBuffer.size(), depthPhotoBuffer.data(),
                 nullptr), 0);
+
+    ASSERT_NE(processDepthPhotoFrame(inputFrame, depthPhotoBuffer.size(), depthPhotoBuffer.data(),
+                &actualDepthPhotoSize), 0);
 }
 
 TEST(DepthProcessorTest, BasicDepthPhotoValidation) {

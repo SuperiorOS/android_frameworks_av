@@ -47,7 +47,8 @@ public:
             audio_io_handle_t handle,
             audio_devices_t deviceType,
             struct audio_config *config,
-            const char *address);
+            const char *address,
+            const std::vector<playback_track_metadata_v7_t>& sourceMetadata);
 
     virtual ~AudioStreamOut();
 

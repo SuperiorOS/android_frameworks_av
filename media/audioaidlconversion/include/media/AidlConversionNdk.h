@@ -28,6 +28,7 @@
 
 #include <aidl/android/hardware/audio/common/PlaybackTrackMetadata.h>
 #include <aidl/android/hardware/audio/common/RecordTrackMetadata.h>
+#include <aidl/android/hardware/audio/common/SourceMetadata.h>
 #include <aidl/android/media/audio/common/AudioConfig.h>
 #include <media/AidlConversionUtil.h>
 
@@ -55,6 +56,10 @@ aidl2legacy_RecordTrackMetadata_record_track_metadata_v7(
         const hardware::audio::common::RecordTrackMetadata& aidl);
 ConversionResult<hardware::audio::common::RecordTrackMetadata>
 legacy2aidl_record_track_metadata_v7_RecordTrackMetadata(const record_track_metadata_v7& legacy);
+
+ConversionResult<hardware::audio::common::SourceMetadata>
+legacy2aidl_playback_track_metadata_v7_SourceMetadata(
+        const std::vector<playback_track_metadata_v7_t>& legacy);
 
 }  // namespace android
 }  // namespace aidl

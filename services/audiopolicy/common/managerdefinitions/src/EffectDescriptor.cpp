@@ -210,27 +210,13 @@ void EffectDescriptorCollection::moveEffects(const std::vector<int>& ids, audio_
     }
 }
 
-bool EffectDescriptorCollection::hasOrphansForSession(audio_session_t sessionId) const
-{
+bool EffectDescriptorCollection::hasOrphansForSession(audio_session_t sessionId,
+                                                      const effect_uuid_t* effectType) const {
     for (size_t i = 0; i < size(); ++i) {
         sp<EffectDescriptor> effect = valueAt(i);
-        if (effect->mSession == sessionId && effect->mIsOrphan) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool EffectDescriptorCollection::hasOrphanEffectsForSessionAndType(
-        audio_session_t sessionId, const effect_uuid_t* effectType) const {
-    if (effectType == nullptr) {
-        return hasOrphansForSession(sessionId);
-    }
-
-    for (size_t i = 0; i < size(); ++i) {
-        sp<EffectDescriptor> effect = valueAt(i);
-        if (effect->mIsOrphan && effect->mSession == sessionId &&
-            memcmp(&effect->mDesc.type, effectType, sizeof(effect_uuid_t)) == 0) {
+        if (effect->mSession == sessionId && effect->mIsOrphan &&
+            (effectType == nullptr ||
+             memcmp(&effect->mDesc.type, effectType, sizeof(effect_uuid_t)) == 0)) {
             return true;
         }
     }

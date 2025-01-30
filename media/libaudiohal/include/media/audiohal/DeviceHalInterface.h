@@ -90,7 +90,8 @@ class DeviceHalInterface : public virtual RefBase
             audio_output_flags_t flags,
             struct audio_config *config,
             const char *address,
-            sp<StreamOutHalInterface> *outStream) = 0;
+            sp<StreamOutHalInterface> *outStream,
+            const std::vector<playback_track_metadata_v7_t>& sourceMetadata = {}) = 0;
 
     // Creates and opens the audio hardware input stream. The stream is closed
     // by releasing all references to the returned object.

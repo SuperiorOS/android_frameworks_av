@@ -16,10 +16,11 @@
 
 #pragma once
 
-#include "EngineBase.h"
-#include <EngineInterface.h>
-#include <AudioPolicyPluginInterface.h>
 #include "Collection.h"
+#include "EngineBase.h"
+#include <AudioPolicyPluginInterface.h>
+#include <CapEngineConfig.h>
+#include <EngineInterface.h>
 
 namespace android {
 class AudioPolicyManagerObserver;
@@ -107,8 +108,14 @@ public:
     {
         return EngineBase::getProductStrategyByName(name);
     }
+    std::string getProductStrategyName(product_strategy_t id) const override {
+        return EngineBase::getProductStrategyName(id);
+    }
 
 private:
+    template<typename T>
+    status_t loadWithFallback(const T& configSource);
+
     android::status_t disableDevicesForStrategy(product_strategy_t strategy,
             const DeviceVector &devicesToDisable);
     void enableDevicesForStrategy(product_strategy_t strategy, const DeviceVector &devicesToEnable);
@@ -139,8 +146,6 @@ private:
 
     template <typename Property, typename Key>
     bool setPropertyForKey(const Property &property, const Key &key);
-
-    status_t loadAudioPolicyEngineConfig(const std::string& xmlFilePath);
 
     DeviceVector getCachedDevices(product_strategy_t ps) const;
 

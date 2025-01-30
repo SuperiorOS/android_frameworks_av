@@ -50,6 +50,23 @@ cc_aconfig_library {
 }
 
 cc_aconfig_library {
+    name: "com.android.media.audioserver-aconfig-cc-ro",
+    aconfig_declarations: "com.android.media.audioserver-aconfig",
+    defaults: ["audio-aconfig-cc-defaults"],
+    double_loadable: true,
+    host_supported: true,
+    product_available: true,
+    vendor_available: true,
+    apex_available: [
+        "//apex_available:platform",
+        "com.android.media",
+        "com.android.media.swcodec",
+    ],
+    min_sdk_version: "29",
+    mode: "force-read-only",
+}
+
+cc_aconfig_library {
     name: "com.android.media.audio-aconfig-cc",
     aconfig_declarations: "com.android.media.audio-aconfig",
     defaults: ["audio-aconfig-cc-defaults"],

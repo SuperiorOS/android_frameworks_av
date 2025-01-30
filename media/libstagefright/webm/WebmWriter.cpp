@@ -290,7 +290,7 @@ uint64_t WebmWriter::estimateCuesSize(int32_t bitRate) {
     // Max file duration limit is set
     if (mMaxFileDurationLimitUs != 0) {
         if (bitRate > 0) {
-            int64_t size2 = ((mMaxFileDurationLimitUs * bitRate * 6) / 1000 / 8000000);
+            int64_t size2 = ((mMaxFileDurationLimitUs / 1000) * bitRate * 6) / 8000000;
             if (mMaxFileSizeLimitBytes != 0 && mIsFileSizeLimitExplicitlyRequested) {
                 // When both file size and duration limits are set,
                 // we use the smaller limit of the two.

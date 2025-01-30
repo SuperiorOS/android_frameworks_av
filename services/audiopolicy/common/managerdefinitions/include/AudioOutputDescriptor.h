@@ -413,7 +413,8 @@ public:
                       const DeviceVector &devices,
                       audio_stream_type_t stream,
                       audio_output_flags_t flags,
-                      audio_io_handle_t *output);
+                      audio_io_handle_t *output,
+                      audio_attributes_t attributes);
 
         // Called when a stream is about to be started
         // Note: called before setClientActive(true);
@@ -489,6 +490,13 @@ public:
     bool isUsageActiveOnDevice(audio_usage_t usage, sp<DeviceDescriptor> device) const;
 
     virtual std::string info() const override;
+
+    /**
+     * Finds all ports matching the given volume source.
+     * @param vs to be considered
+     * @return vector of ports following the given volume source.
+     */
+    std::vector<audio_port_handle_t> getPortsForVolumeSource(const VolumeSource& vs);
 
     const sp<IOProfile> mProfile;          // I/O profile this output derives from
     audio_io_handle_t mIoHandle;           // output handle

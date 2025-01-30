@@ -81,9 +81,8 @@ private:
     void threadLoop() NO_THREAD_SAFETY_ANALYSIS { // thread safety doesn't cover unique_lock
         std::unique_lock l(mLock);
         while (!mQuit) {
-            auto sleepUntilTime = std::chrono::time_point<TimerClock>::max();
             if (!mMap.empty()) {
-                sleepUntilTime = mMap.begin()->first;
+                auto sleepUntilTime = mMap.begin()->first;
                 const auto now = TimerClock::now();
                 if (sleepUntilTime <= now) {
                     auto node = mMap.extract(mMap.begin()); // removes from mMap.
@@ -96,8 +95,17 @@ private:
                 // of REALTIME specification, use kWakeupInterval to ensure minimum
                 // granularity if suspended.
                 sleepUntilTime = std::min(sleepUntilTime, now + kWakeupInterval);
+                mCondition.wait_until(l, sleepUntilTime);
+            } else {
+                // As TimerClock is system_clock (which is not monotonic), libcxx's
+                // implementation of condition_variable::wait_until(l, std::chrono::time_point)
+                // recalculates the 'until' time into the wait duration and then goes back to the
+                // absolute timestamp when calling pthread_cond_timedwait(); this back-and-forth
+                // calculation sometimes loses the 'max' value because enough time passes in
+                // between, and instead passes incorrect timestamp into the syscall, causing a
+                // crash. Mitigating it by explicitly calling the non-timed wait here.
+                mCondition.wait(l);
             }
-            mCondition.wait_until(l, sleepUntilTime);
         }
     }
 

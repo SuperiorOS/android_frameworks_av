@@ -71,23 +71,18 @@ public:
     void reset();
 
     /**
-     * Create a listener for buffer being released.
-     *
-     * Surface will register this listener and notify whenever the consumer
-     * releases a buffer.
-     *
-     * @param   generation        generation # for the BufferQueue.
-     * @return  IProducerListener can be used when connect# to Surface.
-     */
-    const ::android::sp<::android::IProducerListener> createReleaseListener(
-            uint32_t generation);
-
-    /**
      * Notifies a buffer being released.
      *
      * @param   generation        generation # for the BufferQueue.
      */
     void onBufferReleased(uint32_t generation);
+
+    /**
+     * Notifies a buffer being attached to the consumer.
+     *
+     * @param   generation        generation # for the BufferQueue.
+     */
+    void onBufferAttached(uint32_t generation);
 
     /**
      * Allocates a buffer.

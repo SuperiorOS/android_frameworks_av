@@ -22,13 +22,9 @@
 #include <utils/Trace.h>
 #include <cutils/properties.h>
 
-#include "camera/CameraMetadata.h"
 #include "CameraFlashlight.h"
-#include "gui/IGraphicBufferConsumer.h"
-#include "gui/BufferQueue.h"
+#include "camera/CameraMetadata.h"
 #include "camera/camera2/CaptureRequest.h"
-#include "device3/Camera3Device.h"
-
 
 namespace android {
 

@@ -52,12 +52,17 @@ status_t AidlConversionHapticGenerator::setParameter(EffectParamReader& param) {
     switch (type) {
         case HG_PARAM_HAPTIC_INTENSITY: {
             int32_t id = 0, scale;
-            if (OK != param.readFromValue(&id) || OK != param.readFromValue(&scale)) {
+            float scaleFactor, adaptiveScaleFactor;
+            if (OK != param.readFromValue(&id) || OK != param.readFromValue(&scale) ||
+                OK != param.readFromValue(&scaleFactor) ||
+                OK != param.readFromValue(&adaptiveScaleFactor)) {
                 ALOGE("%s invalid intensity %s", __func__, param.toString().c_str());
                 return BAD_VALUE;
             }
-            HapticGenerator::HapticScale hpScale(
-                    {.id = id, .scale = (HapticGenerator::VibratorScale)(scale)});
+            HapticGenerator::HapticScale hpScale({.id = id,
+                                                  .scale = (HapticGenerator::VibratorScale)(scale),
+                                                  .scaleFactor = scaleFactor,
+                                                  .adaptiveScaleFactor = adaptiveScaleFactor});
             aidlParam = MAKE_SPECIFIC_PARAMETER(HapticGenerator, hapticGenerator, hapticScales,
                                                 {hpScale});
             break;

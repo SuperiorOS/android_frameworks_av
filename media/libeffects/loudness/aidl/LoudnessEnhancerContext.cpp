@@ -43,17 +43,13 @@ RetCode LoudnessEnhancerContext::disable() {
     return RetCode::SUCCESS;
 }
 
-void LoudnessEnhancerContext::reset() {
-    float targetAmp = pow(10, mGain / 2000.0f);  // mB to linear amplification
+RetCode LoudnessEnhancerContext::setLeGain(int gainMb) {
+    float targetAmp = pow(10, gainMb / 2000.0f);  // mB to linear amplification
     if (mCompressor != nullptr) {
         // Get samplingRate from input
         mCompressor->Initialize(targetAmp, mCommon.input.base.sampleRate);
     }
-}
-
-RetCode LoudnessEnhancerContext::setLeGain(int gainMb) {
     mGain = gainMb;
-    reset();  // apply parameter update
     return RetCode::SUCCESS;
 }
 

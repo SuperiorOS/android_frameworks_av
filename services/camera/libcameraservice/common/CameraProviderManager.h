@@ -431,6 +431,11 @@ public:
     // LocalRegistrationCallback::onServiceRegistration
     virtual void onServiceRegistration(const String16& name, const sp<IBinder> &binder) override;
 
+    /*
+     * Return list of provider pid
+     */
+    std::set<pid_t> getProviderPids();
+
     /**
      * Dump out information about available providers and devices
      */
@@ -913,6 +918,9 @@ private:
     std::vector<sp<ProviderInfo>> mProviders;
     // Provider names of AIDL providers with retrieved binders.
     std::set<std::string> mAidlProviderWithBinders;
+
+    std::mutex mProviderPidMapLock;
+    std::map<std::string, pid_t> mProviderPidMap;
 
     static const char* deviceStatusToString(
         const hardware::camera::common::V1_0::CameraDeviceStatus&);

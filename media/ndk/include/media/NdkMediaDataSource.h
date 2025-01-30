@@ -49,16 +49,16 @@ typedef struct AMediaDataSource AMediaDataSource;
 /*
  * AMediaDataSource's callbacks will be invoked on an implementation-defined thread
  * or thread pool. No guarantees are provided about which thread(s) will be used for
- * callbacks. For example, |close| can be invoked from a different thread than the
- * thread invoking |readAt|. As such, the Implementations of AMediaDataSource callbacks
+ * callbacks. For example, `close` can be invoked from a different thread than the
+ * thread invoking `readAt`. As such, the Implementations of AMediaDataSource callbacks
  * must be threadsafe.
  */
 
 /**
- * Called to request data from the given |offset|.
+ * Called to request data from the given `offset`.
  *
- * Implementations should should write up to |size| bytes into
- * |buffer|, and return the number of bytes written.
+ * Implementations should should write up to `size` bytes into
+ * `buffer`, and return the number of bytes written.
  *
  * Return 0 if size is zero (thus no bytes are read).
  *
@@ -78,9 +78,9 @@ typedef ssize_t (*AMediaDataSourceGetSize)(void *userdata);
  * Called to close the data source, unblock reads, and release associated
  * resources.
  *
- * The NDK media framework guarantees that after the first |close| is
+ * The NDK media framework guarantees that after the first `close` is
  * called, no future callbacks will be invoked on the data source except
- * for |close| itself.
+ * for `close` itself.
  *
  * Closing a data source allows readAt calls that were blocked waiting
  * for I/O data to return promptly.
@@ -101,7 +101,7 @@ AMediaDataSource* AMediaDataSource_new() __INTRODUCED_IN(28);
 
 /**
  * Called to get an estimate of the number of bytes that can be read from this data source
- * starting at |offset| without blocking for I/O.
+ * starting at `offset` without blocking for I/O.
  *
  * Return -1 when such an estimate is not possible.
  */
@@ -111,10 +111,10 @@ typedef ssize_t (*AMediaDataSourceGetAvailableSize)(void *userdata, off64_t offs
  * Create new media data source. Returns NULL if memory allocation
  * for the new data source object fails.
  *
- * Set the |uri| from which the data source will read,
+ * Set the `uri` from which the data source will read,
  * plus additional http headers when initiating the request.
  *
- * Headers will contain corresponding items from |key_values|
+ * Headers will contain corresponding items from `key_values`
  * in the following fashion:
  *
  * key_values[0]:key_values[1]

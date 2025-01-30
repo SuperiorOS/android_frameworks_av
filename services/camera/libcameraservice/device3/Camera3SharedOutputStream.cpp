@@ -18,6 +18,8 @@
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 //#define LOG_NDEBUG 0
 
+#include "Flags.h"
+
 #include "Camera3SharedOutputStream.h"
 
 namespace android {
@@ -59,7 +61,11 @@ Camera3SharedOutputStream::~Camera3SharedOutputStream() {
 status_t Camera3SharedOutputStream::connectStreamSplitterLocked() {
     status_t res = OK;
 
-    mStreamSplitter = new Camera3StreamSplitter(mUseHalBufManager);
+#if USE_NEW_STREAM_SPLITTER
+    mStreamSplitter = sp<Camera3StreamSplitter>::make(mUseHalBufManager);
+#else
+    mStreamSplitter = sp<DeprecatedCamera3StreamSplitter>::make(mUseHalBufManager);
+#endif  // USE_NEW_STREAM_SPLITTER
 
     uint64_t usage = 0;
     getEndpointUsage(&usage);
@@ -90,7 +96,11 @@ status_t Camera3SharedOutputStream::attachBufferToSplitterLocked(
     // Attach the buffer to the splitter output queues. This could block if
     // the output queue doesn't have any empty slot. So unlock during the course
     // of attachBufferToOutputs.
+#if USE_NEW_STREAM_SPLITTER
     sp<Camera3StreamSplitter> splitter = mStreamSplitter;
+#else
+    sp<DeprecatedCamera3StreamSplitter> splitter = mStreamSplitter;
+#endif  // USE_NEW_STREAM_SPLITTER
     mLock.unlock();
     res = splitter->attachBufferToOutputs(anb, surface_ids);
     mLock.lock();

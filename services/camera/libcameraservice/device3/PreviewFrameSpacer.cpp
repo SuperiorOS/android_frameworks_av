@@ -18,10 +18,16 @@
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 //#define LOG_NDEBUG 0
 
+#include <com_android_internal_camera_flags.h>
+
 #include <utils/Log.h>
 
 #include "PreviewFrameSpacer.h"
 #include "Camera3OutputStream.h"
+#include "utils/SchedulingPolicyUtils.h"
+#include "utils/Utils.h"
+
+namespace flags = com::android::internal::camera::flags;
 
 namespace android {
 
@@ -127,6 +133,24 @@ void PreviewFrameSpacer::queueBufferToClientLocked(
     parent->onCachedBufferQueued();
     mLastCameraPresentTime = currentTime;
     mLastCameraReadoutTime = bufferHolder.readoutTimestamp;
+}
+
+status_t PreviewFrameSpacer::run(const char* name, int32_t priority, size_t stack) {
+    auto ret = Thread::run(name, priority, stack);
+    if (flags::bump_preview_frame_space_priority()) {
+        // Boost priority of the preview frame spacer thread to SCHED_FIFO.
+        pid_t previewFrameSpacerTid = getTid();
+        auto res = SchedulingPolicyUtils::requestPriorityDirect(getpid(), previewFrameSpacerTid,
+                RunThreadWithRealtimePriority::kRequestThreadPriority);
+        if (res != OK) {
+            ALOGW("Can't set realtime priority for preview frame spacer thread: %s (%d)",
+                    strerror(-res), res);
+        } else {
+            ALOGV("Set real time priority for preview frame spacer thread (tid %d)",
+                    previewFrameSpacerTid);
+        }
+    }
+    return ret;
 }
 
 }; // namespace camera3

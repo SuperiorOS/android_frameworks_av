@@ -35,6 +35,7 @@ namespace android {
 
 using hardware::audio::common::PlaybackTrackMetadata;
 using hardware::audio::common::RecordTrackMetadata;
+using hardware::audio::common::SourceMetadata;
 using ::android::BAD_VALUE;
 using ::android::OK;
 
@@ -191,6 +192,18 @@ legacy2aidl_record_track_metadata_v7_RecordTrackMetadata(const record_track_meta
     aidl.channelMask = VALUE_OR_RETURN(legacy2aidl_audio_channel_mask_t_AudioChannelLayout(
                     legacy.channel_mask, true /*isInput*/));
     aidl.tags = VALUE_OR_RETURN(legacy2aidl_AudioAttributesTags(legacy.tags));
+    return aidl;
+}
+
+// static
+ConversionResult<SourceMetadata>
+legacy2aidl_playback_track_metadata_v7_SourceMetadata(
+        const std::vector<playback_track_metadata_v7_t>& legacy) {
+    SourceMetadata aidl;
+    aidl.tracks = VALUE_OR_RETURN(
+            convertContainer<std::vector<PlaybackTrackMetadata>>(
+                    legacy,
+                    legacy2aidl_playback_track_metadata_v7_PlaybackTrackMetadata));
     return aidl;
 }
 

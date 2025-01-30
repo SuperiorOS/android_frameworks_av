@@ -28,6 +28,7 @@ public class IBufferXfer {
       public Object obj;
       int flag;
       int bytesRead;
+      boolean isComplete = true;
       long presentationTimeUs;
   }
 

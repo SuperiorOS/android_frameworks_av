@@ -185,7 +185,8 @@ class Spatializer : public media::BnSpatializer,
     /** Called by audio policy service when the special output mixer dedicated to spatialization
      * is opened and the spatializer engine must be created.
      */
-    status_t attachOutput(audio_io_handle_t output, size_t numActiveTracks);
+    status_t attachOutput(audio_io_handle_t output,
+                          const std::vector<audio_channel_mask_t>& activeTracksMasks);
     /** Called by audio policy service when the special output mixer dedicated to spatialization
      * is closed and the spatializer engine must be release.
      */
@@ -199,7 +200,7 @@ class Spatializer : public media::BnSpatializer,
         mOutput = output;
     }
 
-    void updateActiveTracks(size_t numActiveTracks);
+    void updateActiveTracks(const std::vector<audio_channel_mask_t>& activeTracksMasks);
 
     /** Gets the channel mask, sampling rate and format set for the spatializer input. */
     audio_config_base_t getAudioInConfig() const;
@@ -226,6 +227,16 @@ class Spatializer : public media::BnSpatializer,
     /** Made public for test only */
     void onSupportedLatencyModesChangedMsg(
             audio_io_handle_t output, std::vector<audio_latency_mode_t>&& modes);
+
+    // Made public for test only
+    /**
+     * Returns true if there exists an immersive channel mask in the vector.
+     *
+     * Example of a non-immersive channel mask such as AUDIO_CHANNEL_OUT_STEREO
+     * versus an immersive channel mask such as AUDIO_CHANNEL_OUT_5POINT1.
+     */
+    static bool containsImmersiveChannelMask(
+            const std::vector<audio_channel_mask_t>& masks);
 
 private:
     Spatializer(effect_descriptor_t engineDescriptor,
@@ -462,6 +473,11 @@ private:
      */
     audio_latency_mode_t selectHeadtrackingConnectionMode_l() REQUIRES(mMutex);
 
+    /**
+     * Indicates if current conditions are compatible with head tracking.
+     */
+    bool shouldUseHeadTracking_l() const REQUIRES(mMutex);
+
     /** Effect engine descriptor */
     const effect_descriptor_t mEngineDescriptor;
     /** Callback interface to parent audio policy service */
@@ -539,7 +555,7 @@ private:
     sp<ALooper> mLooper;
     sp<EngineCallbackHandler> mHandler;
 
-    size_t mNumActiveTracks GUARDED_BY(mMutex) = 0;
+    std::vector<audio_channel_mask_t> mActiveTracksMasks GUARDED_BY(mMutex);
     std::vector<audio_latency_mode_t> mSupportedLatencyModes GUARDED_BY(mMutex);
     /** preference order for low latency modes according to persist.bluetooth.hid.transport */
     std::vector<audio_latency_mode_t> mOrderedLowLatencyModes;

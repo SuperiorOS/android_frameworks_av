@@ -314,6 +314,29 @@ status_t TrackBase::setSyncEvent(
     return NO_ERROR;
 }
 
+void TrackBase::deferRestartIfDisabled()
+{
+    const auto thread = mThread.promote();
+    if (thread == nullptr) return;
+    auto weakTrack = wp<TrackBase>::fromExisting(this);
+    thread->getThreadloopExecutor().defer([weakTrack] {
+            const auto actual = weakTrack.promote();
+            if (actual) actual->restartIfDisabled();
+        });
+}
+
+void TrackBase::beginBatteryAttribution() {
+    mBatteryStatsHolder.emplace(uid());
+    if (media::psh_utils::AudioPowerManager::enabled()) {
+        mTrackToken = media::psh_utils::createAudioTrackToken(uid());
+    }
+}
+
+void TrackBase::endBatteryAttribution() {
+    mBatteryStatsHolder.reset();
+    mTrackToken.reset();
+}
+
 PatchTrackBase::PatchTrackBase(const sp<ClientProxy>& proxy,
         IAfThreadBase* thread, const Timeout& timeout)
     : mProxy(proxy)
@@ -704,7 +727,8 @@ sp<IAfTrack> IAfTrack::create(
         size_t frameCountToBeReady,
         float speed,
         bool isSpatialized,
-        bool isBitPerfect) {
+        bool isBitPerfect,
+        float volume) {
     return sp<Track>::make(thread,
             client,
             streamType,
@@ -725,7 +749,8 @@ sp<IAfTrack> IAfTrack::create(
             frameCountToBeReady,
             speed,
             isSpatialized,
-            isBitPerfect);
+            isBitPerfect,
+            volume);
 }
 
 // Track constructor must be called with AudioFlinger::mLock and ThreadBase::mLock held
@@ -750,7 +775,8 @@ Track::Track(
             size_t frameCountToBeReady,
             float speed,
             bool isSpatialized,
-            bool isBitPerfect)
+            bool isBitPerfect,
+            float volume)
     :   TrackBase(thread, client, attr, sampleRate, format, channelMask, frameCount,
                   // TODO: Using unsecurePointer() has some associated security pitfalls
                   //       (see declaration for details).
@@ -786,7 +812,8 @@ Track::Track(
     mFlags(flags),
     mSpeed(speed),
     mIsSpatialized(isSpatialized),
-    mIsBitPerfect(isBitPerfect)
+    mIsBitPerfect(isBitPerfect),
+    mVolume(volume)
 {
     // client == 0 implies sharedBuffer == 0
     ALOG_ASSERT(!(client == 0 && sharedBuffer != 0));
@@ -832,6 +859,14 @@ Track::Track(
         thread->fastTrackAvailMask_l() &= ~(1 << i);
     }
 
+    populateUsageAndContentTypeFromStreamType();
+
+    // Audio patch and call assistant volume are always max
+    if (mAttr.usage == AUDIO_USAGE_CALL_ASSISTANT
+            || mAttr.usage == AUDIO_USAGE_VIRTUAL_SOURCE) {
+        mVolume = 1.0f;
+    }
+
     mServerLatencySupported = checkServerLatencySupported(format, flags);
 #ifdef TEE_SINK
     mTee.setId(std::string("_") + std::to_string(mThreadIoHandle)
@@ -852,6 +887,62 @@ Track::Track(
     // Once this item is logged by the server, the client can add properties.
     const char * const traits = sharedBuffer == 0 ? "" : "static";
     mTrackMetrics.logConstructor(creatorPid, uid, id(), traits, streamType);
+}
+
+// When attributes are undefined, derive default values from stream type.
+// See AudioAttributes.java, usageForStreamType() and Builder.setInternalLegacyStreamType()
+void Track::populateUsageAndContentTypeFromStreamType() {
+    if (mAttr.usage == AUDIO_USAGE_UNKNOWN) {
+        switch (mStreamType) {
+        case AUDIO_STREAM_VOICE_CALL:
+            mAttr.usage = AUDIO_USAGE_VOICE_COMMUNICATION;
+            mAttr.content_type = AUDIO_CONTENT_TYPE_SPEECH;
+            break;
+        case AUDIO_STREAM_SYSTEM:
+            mAttr.usage = AUDIO_USAGE_ASSISTANCE_SONIFICATION;
+            mAttr.content_type = AUDIO_CONTENT_TYPE_SONIFICATION;
+            break;
+        case AUDIO_STREAM_RING:
+            mAttr.usage = AUDIO_USAGE_NOTIFICATION_TELEPHONY_RINGTONE;
+            mAttr.content_type = AUDIO_CONTENT_TYPE_SONIFICATION;
+            break;
+        case AUDIO_STREAM_MUSIC:
+            mAttr.usage = AUDIO_USAGE_MEDIA;
+            mAttr.content_type = AUDIO_CONTENT_TYPE_MUSIC;
+            break;
+        case AUDIO_STREAM_ALARM:
+            mAttr.usage = AUDIO_USAGE_ALARM;
+            mAttr.content_type = AUDIO_CONTENT_TYPE_SONIFICATION;
+            break;
+        case AUDIO_STREAM_NOTIFICATION:
+            mAttr.usage = AUDIO_USAGE_NOTIFICATION;
+            mAttr.content_type = AUDIO_CONTENT_TYPE_SONIFICATION;
+            break;
+        case AUDIO_STREAM_DTMF:
+            mAttr.usage = AUDIO_USAGE_VOICE_COMMUNICATION_SIGNALLING;
+            mAttr.content_type = AUDIO_CONTENT_TYPE_SONIFICATION;
+            break;
+        case AUDIO_STREAM_ACCESSIBILITY:
+            mAttr.usage = AUDIO_USAGE_ASSISTANCE_ACCESSIBILITY;
+            mAttr.content_type = AUDIO_CONTENT_TYPE_SPEECH;
+            break;
+        case AUDIO_STREAM_ASSISTANT:
+            mAttr.usage = AUDIO_USAGE_ASSISTANT;
+            mAttr.content_type = AUDIO_CONTENT_TYPE_SPEECH;
+            break;
+        case AUDIO_STREAM_REROUTING:
+        case AUDIO_STREAM_PATCH:
+            mAttr.usage = AUDIO_USAGE_VIRTUAL_SOURCE;
+            // unknown content type
+            break;
+        case AUDIO_STREAM_CALL_ASSISTANT:
+            mAttr.usage = AUDIO_USAGE_CALL_ASSISTANT;
+            mAttr.content_type = AUDIO_CONTENT_TYPE_SPEECH;
+            break;
+        default:
+            break;
+        }
+    }
 }
 
 Track::~Track()
@@ -912,7 +1003,7 @@ void Track::appendDumpHeader(String8& result) const
     result.appendFormat("Type     Id Active Client Session Port Id S  Flags "
                         "  Format Chn mask  SRate "
                         "ST Usg CT "
-                        " G db  L dB  R dB  VS dB "
+                        " G db  L dB  R dB  VS dB  PortVol dB "
                         "  Server FrmCnt  FrmRdy F Underruns  Flushed BitPerfect InternalMute"
                         "%s\n",
                         isServerLatencySupported() ? "   Latency" : "");
@@ -998,7 +1089,7 @@ void Track::appendDump(String8& result, bool active) const
     result.appendFormat("%7s %6u %7u %7u %2s 0x%03X "
                         "%08X %08X %6u "
                         "%2u %3x %2x "
-                        "%5.2g %5.2g %5.2g %5.2g%c "
+                        "%5.2g %5.2g %5.2g %5.2g%c %11.2g "
                         "%08X %6zu%c %6zu %c %9u%c %7u %10s %12s",
             active ? "yes" : "no",
             (mClient == 0) ? getpid() : mClient->pid(),
@@ -1020,6 +1111,7 @@ void Track::appendDump(String8& result, bool active) const
             20.0 * log10(float_from_gain(gain_minifloat_unpack_right(vlr))),
             20.0 * log10(vsVolume.first), // VolumeShaper(s) total volume
             vsVolume.second ? 'A' : ' ',  // if any VolumeShapers active
+            20.0 * log10(mVolume),
 
             mCblk->mServer,
             bufferSizeInFrames,
@@ -1521,6 +1613,16 @@ status_t Track::selectPresentation(int presentationId,
     return INVALID_OPERATION;
 }
 
+void Track::setPortVolume(float volume) {
+    mVolume = volume;
+    if (mType != TYPE_PATCH) {
+        // Do not recursively propagate a PatchTrack setPortVolume to
+        // downstream PatchTracks.
+        forEachTeePatchTrack_l([volume](const auto& patchTrack) {
+                patchTrack->setPortVolume(volume); });
+    }
+}
+
 VolumeShaper::Status Track::applyVolumeShaper(
         const sp<VolumeShaper::Configuration>& configuration,
         const sp<VolumeShaper::Operation>& operation)
@@ -1575,59 +1677,6 @@ void Track::copyMetadataTo(MetadataInserter& backInserter) const
             .content_type = mAttr.content_type,
             .gain = mFinalVolume,
     };
-
-    // When attributes are undefined, derive default values from stream type.
-    // See AudioAttributes.java, usageForStreamType() and Builder.setInternalLegacyStreamType()
-    if (mAttr.usage == AUDIO_USAGE_UNKNOWN) {
-        switch (mStreamType) {
-        case AUDIO_STREAM_VOICE_CALL:
-            metadata.base.usage = AUDIO_USAGE_VOICE_COMMUNICATION;
-            metadata.base.content_type = AUDIO_CONTENT_TYPE_SPEECH;
-            break;
-        case AUDIO_STREAM_SYSTEM:
-            metadata.base.usage = AUDIO_USAGE_ASSISTANCE_SONIFICATION;
-            metadata.base.content_type = AUDIO_CONTENT_TYPE_SONIFICATION;
-            break;
-        case AUDIO_STREAM_RING:
-            metadata.base.usage = AUDIO_USAGE_NOTIFICATION_TELEPHONY_RINGTONE;
-            metadata.base.content_type = AUDIO_CONTENT_TYPE_SONIFICATION;
-            break;
-        case AUDIO_STREAM_MUSIC:
-            metadata.base.usage = AUDIO_USAGE_MEDIA;
-            metadata.base.content_type = AUDIO_CONTENT_TYPE_MUSIC;
-            break;
-        case AUDIO_STREAM_ALARM:
-            metadata.base.usage = AUDIO_USAGE_ALARM;
-            metadata.base.content_type = AUDIO_CONTENT_TYPE_SONIFICATION;
-            break;
-        case AUDIO_STREAM_NOTIFICATION:
-            metadata.base.usage = AUDIO_USAGE_NOTIFICATION;
-            metadata.base.content_type = AUDIO_CONTENT_TYPE_SONIFICATION;
-            break;
-        case AUDIO_STREAM_DTMF:
-            metadata.base.usage = AUDIO_USAGE_VOICE_COMMUNICATION_SIGNALLING;
-            metadata.base.content_type = AUDIO_CONTENT_TYPE_SONIFICATION;
-            break;
-        case AUDIO_STREAM_ACCESSIBILITY:
-            metadata.base.usage = AUDIO_USAGE_ASSISTANCE_ACCESSIBILITY;
-            metadata.base.content_type = AUDIO_CONTENT_TYPE_SPEECH;
-            break;
-        case AUDIO_STREAM_ASSISTANT:
-            metadata.base.usage = AUDIO_USAGE_ASSISTANT;
-            metadata.base.content_type = AUDIO_CONTENT_TYPE_SPEECH;
-            break;
-        case AUDIO_STREAM_REROUTING:
-            metadata.base.usage = AUDIO_USAGE_VIRTUAL_SOURCE;
-            // unknown content type
-            break;
-        case AUDIO_STREAM_CALL_ASSISTANT:
-            metadata.base.usage = AUDIO_USAGE_CALL_ASSISTANT;
-            metadata.base.content_type = AUDIO_CONTENT_TYPE_SPEECH;
-            break;
-        default:
-            break;
-        }
-    }
 
     metadata.channel_mask = mChannelMask;
     strncpy(metadata.tags, mAttr.tags, AUDIO_ATTRIBUTES_TAGS_MAX_SIZE);
@@ -2180,14 +2229,13 @@ OutputTrack::OutputTrack(
             size_t frameCount,
             const AttributionSourceState& attributionSource)
     :   Track(playbackThread, NULL, AUDIO_STREAM_PATCH,
-              audio_attributes_t{} /* currently unused for output track */,
+              AUDIO_ATTRIBUTES_INITIALIZER ,
               sampleRate, format, channelMask, frameCount,
               nullptr /* buffer */, (size_t)0 /* bufferSize */, nullptr /* sharedBuffer */,
               AUDIO_SESSION_NONE, getpid(), attributionSource, AUDIO_OUTPUT_FLAG_NONE,
               TYPE_OUTPUT),
     mActive(false), mSourceThread(sourceThread)
 {
-
     if (mCblk != NULL) {
         mOutBuffer.frameCount = 0;
         playbackThread->addOutputTrack_l(this);
@@ -2310,7 +2358,7 @@ ssize_t OutputTrack::write(void* data, uint32_t frames)
                 waitTimeLeftMs = 0;
             }
             if (status == NOT_ENOUGH_DATA) {
-                restartIfDisabled();
+                deferRestartIfDisabled();
                 continue;
             }
         }
@@ -2322,7 +2370,7 @@ ssize_t OutputTrack::write(void* data, uint32_t frames)
         buf.mFrameCount = outFrames;
         buf.mRaw = NULL;
         mClientProxy->releaseBuffer(&buf);
-        restartIfDisabled();
+        deferRestartIfDisabled();
         pInBuffer->frameCount -= outFrames;
         pInBuffer->raw = (int8_t *)pInBuffer->raw + outFrames * mFrameSize;
         mOutBuffer.frameCount -= outFrames;
@@ -2453,7 +2501,8 @@ sp<IAfPatchTrack> IAfPatchTrack::create(
                                          *  as soon as possible to have
                                          *  the lowest possible latency
                                          *  even if it might glitch. */
-        float speed)
+        float speed,
+        float volume)
 {
     return sp<PatchTrack>::make(
             playbackThread,
@@ -2467,7 +2516,8 @@ sp<IAfPatchTrack> IAfPatchTrack::create(
             flags,
             timeout,
             frameCountToBeReady,
-            speed);
+            speed,
+            volume);
 }
 
 PatchTrack::PatchTrack(IAfPlaybackThread* playbackThread,
@@ -2481,13 +2531,15 @@ PatchTrack::PatchTrack(IAfPlaybackThread* playbackThread,
                                                      audio_output_flags_t flags,
                                                      const Timeout& timeout,
                                                      size_t frameCountToBeReady,
-                                                     float speed)
+                                                     float speed,
+                                                     float volume)
     :   Track(playbackThread, NULL, streamType,
-              audio_attributes_t{} /* currently unused for patch track */,
+              AUDIO_ATTRIBUTES_INITIALIZER,
               sampleRate, format, channelMask, frameCount,
               buffer, bufferSize, nullptr /* sharedBuffer */,
               AUDIO_SESSION_NONE, getpid(), audioServerAttributionSource(getpid()), flags,
-              TYPE_PATCH, AUDIO_PORT_HANDLE_NONE, frameCountToBeReady, speed),
+              TYPE_PATCH, AUDIO_PORT_HANDLE_NONE, frameCountToBeReady, speed,
+              false /*isSpatialized*/, false /*isBitPerfect*/, volume),
         PatchTrackBase(mCblk ? new AudioTrackClientProxy(mCblk, mBuffer, frameCount, mFrameSize,
                         true /*clientInServer*/) : nullptr,
                        playbackThread, timeout)
@@ -2577,7 +2629,7 @@ status_t PatchTrack::obtainBuffer(Proxy::Buffer* buffer,
     const size_t originalFrameCount = buffer->mFrameCount;
     do {
         if (status == NOT_ENOUGH_DATA) {
-            restartIfDisabled();
+            deferRestartIfDisabled();
             buffer->mFrameCount = originalFrameCount; // cleared on error, must be restored.
         }
         status = mProxy->obtainBuffer(buffer, timeOut);
@@ -2588,7 +2640,7 @@ status_t PatchTrack::obtainBuffer(Proxy::Buffer* buffer,
 void PatchTrack::releaseBuffer(Proxy::Buffer* buffer)
 {
     mProxy->releaseBuffer(buffer);
-    restartIfDisabled();
+    deferRestartIfDisabled();
 
     // Check if the PatchTrack has enough data to write once in releaseBuffer().
     // If not, prevent an underrun from occurring by moving the track into FS_FILLING;
@@ -3471,7 +3523,8 @@ sp<IAfMmapTrack> IAfMmapTrack::create(IAfThreadBase* thread,
           bool isOut,
           const android::content::AttributionSourceState& attributionSource,
           pid_t creatorPid,
-          audio_port_handle_t portId)
+          audio_port_handle_t portId,
+          float volume)
 {
     return sp<MmapTrack>::make(
             thread,
@@ -3483,7 +3536,8 @@ sp<IAfMmapTrack> IAfMmapTrack::create(IAfThreadBase* thread,
             isOut,
             attributionSource,
             creatorPid,
-            portId);
+            portId,
+            volume);
 }
 
 MmapTrack::MmapTrack(IAfThreadBase* thread,
@@ -3495,7 +3549,8 @@ MmapTrack::MmapTrack(IAfThreadBase* thread,
         bool isOut,
         const AttributionSourceState& attributionSource,
         pid_t creatorPid,
-        audio_port_handle_t portId)
+        audio_port_handle_t portId,
+        float volume)
     :   TrackBase(thread, NULL, attr, sampleRate, format,
                   channelMask, (size_t)0 /* frameCount */,
                   nullptr /* buffer */, (size_t)0 /* bufferSize */,
@@ -3506,10 +3561,15 @@ MmapTrack::MmapTrack(IAfThreadBase* thread,
                   TYPE_DEFAULT, portId,
                   std::string(AMEDIAMETRICS_KEY_PREFIX_AUDIO_MMAP) + std::to_string(portId)),
         mPid(VALUE_OR_FATAL(aidl2legacy_int32_t_uid_t(attributionSource.pid))),
-            mSilenced(false), mSilencedNotified(false)
+            mSilenced(false), mSilencedNotified(false), mVolume(volume)
 {
     // Once this item is logged by the server, the client can add properties.
     mTrackMetrics.logConstructor(creatorPid, uid(), id());
+    if (isOut && (attr.usage == AUDIO_USAGE_CALL_ASSISTANT
+            || attr.usage == AUDIO_USAGE_VIRTUAL_SOURCE)) {
+        // Audio patch and call assistant volume are always max
+        mVolume = 1.0f;
+    }
 }
 
 MmapTrack::~MmapTrack()
@@ -3588,8 +3648,8 @@ void MmapTrack::processMuteEvent_l(const sp<IAudioManager>& audioManager, mute_s
 
 void MmapTrack::appendDumpHeader(String8& result) const
 {
-    result.appendFormat("Client Session Port Id  Format Chn mask  SRate Flags %s\n",
-                        isOut() ? "Usg CT": "Source");
+    result.appendFormat("Client Session Port Id  Format Chn mask  SRate Flags %s  %s\n",
+                        isOut() ? "Usg CT": "Source", isOut() ? "PortVol dB" : "");
 }
 
 void MmapTrack::appendDump(String8& result, bool active __unused) const
@@ -3604,6 +3664,7 @@ void MmapTrack::appendDump(String8& result, bool active __unused) const
             mAttr.flags);
     if (isOut()) {
         result.appendFormat("%3x %2x", mAttr.usage, mAttr.content_type);
+        result.appendFormat("%11.2g", 20.0 * log10(mVolume));
     } else {
         result.appendFormat("%6x", mAttr.source);
     }

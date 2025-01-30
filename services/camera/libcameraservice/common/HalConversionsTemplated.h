@@ -19,6 +19,7 @@
 #include "common/CameraProviderManager.h"
 
 #include <device3/Camera3StreamInterface.h>
+#include <utils/Utils.h>
 
 namespace android {
 
@@ -48,7 +49,7 @@ CameraDeviceStatus HalToFrameworkCameraDeviceStatus(
         case HalCameraDeviceStatus::ENUMERATING:
             return CameraDeviceStatus::ENUMERATING;
     }
-    ALOGW("Unexpectedcamera device status code %d", s);
+    ALOGW("Unexpectedcamera device status code %d", eToI(s));
     return CameraDeviceStatus::NOT_PRESENT;
 }
 
@@ -74,7 +75,7 @@ TorchModeStatus HalToFrameworkTorchModeStatus(
         case HalTorchModeStatus::AVAILABLE_ON:
             return TorchModeStatus::AVAILABLE_ON;
     }
-    ALOGW("Unexpectedcamera torch mode status code %d", s);
+    ALOGW("Unexpectedcamera torch mode status code %d", eToI(s));
     return TorchModeStatus::NOT_AVAILABLE;
 }
 
@@ -88,7 +89,7 @@ template <class HalCameraDeviceStatus>
         case HalCameraDeviceStatus::ENUMERATING:
             return "ENUMERATING";
     }
-    ALOGW("Unexpected HAL device status code %d", s);
+    ALOGW("Unexpected HAL device status code %d", eToI(s));
     return "UNKNOWN_STATUS";
 }
 

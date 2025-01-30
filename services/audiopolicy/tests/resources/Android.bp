@@ -11,11 +11,16 @@ package {
 filegroup {
     name: "audiopolicytest_configuration_files",
     srcs: [
+        "engine/test_audio_policy_engine_configuration.xml",
+        "engine/test_audio_policy_engine_default_stream_volumes.xml",
+        "engine/test_audio_policy_engine_product_strategies.xml",
+        "engine/test_audio_policy_engine_stream_volumes.xml",
         "test_audio_policy_configuration.xml",
         "test_audio_policy_configuration_bluetooth.xml",
         "test_audio_policy_primary_only_configuration.xml",
         "test_car_ap_atmos_offload_configuration.xml",
         "test_invalid_audio_policy_configuration.xml",
+        "test_phone_apm_configuration.xml",
         "test_settop_box_surround_configuration.xml",
         "test_tv_apm_configuration.xml",
     ],

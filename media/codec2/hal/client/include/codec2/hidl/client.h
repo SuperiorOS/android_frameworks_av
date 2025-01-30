@@ -467,6 +467,9 @@ struct Codec2Client::Component : public Codec2Client::Configurable {
             const QueueBufferInput& input,
             QueueBufferOutput* output);
 
+    // configure consumer usage.
+    uint64_t configConsumerUsage(const sp<IGraphicBufferProducer>& surface);
+
     // Retrieve frame event history from the output surface.
     void pollForRenderedFrames(FrameEventHistoryDelta* delta);
 
@@ -479,6 +482,10 @@ struct Codec2Client::Component : public Codec2Client::Configurable {
 
     // Notify a buffer is released from output surface.
     void onBufferReleasedFromOutputSurface(
+            uint32_t generation);
+
+    // Notify a buffer is attached to output surface.
+    void onBufferAttachedToOutputSurface(
             uint32_t generation);
 
     // When the client received \p workList and the blocks inside

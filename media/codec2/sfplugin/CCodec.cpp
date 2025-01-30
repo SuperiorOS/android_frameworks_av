@@ -96,11 +96,14 @@ private:
 
 public:
     static sp<CCodecWatchdog> getInstance() {
-        static sp<CCodecWatchdog> instance(new CCodecWatchdog);
-        static std::once_flag flag;
-        // Call Init() only once.
-        std::call_once(flag, Init, instance);
-        return instance;
+        static sp<CCodecWatchdog> sInstance = [] {
+            sp<CCodecWatchdog> instance = new CCodecWatchdog;
+            // the instance should never get destructed
+            instance->incStrong((void *)CCodecWatchdog::getInstance);
+            instance->init();
+            return instance;
+        }();
+        return sInstance;
     }
 
     ~CCodecWatchdog() = default;
@@ -146,11 +149,11 @@ protected:
 private:
     CCodecWatchdog() : mLooper(new ALooper) {}
 
-    static void Init(const sp<CCodecWatchdog> &thiz) {
-        ALOGV("Init");
-        thiz->mLooper->setName("CCodecWatchdog");
-        thiz->mLooper->registerHandler(thiz);
-        thiz->mLooper->start();
+    void init() {
+        ALOGV("init");
+        mLooper->setName("CCodecWatchdog");
+        mLooper->registerHandler(this);
+        mLooper->start();
     }
 
     sp<ALooper> mLooper;
@@ -222,19 +225,20 @@ public:
     ~HGraphicBufferSourceWrapper() override = default;
 
     status_t connect(const std::shared_ptr<Codec2Client::Component> &comp) override {
-        mNode = new C2OMXNode(comp);
-        mOmxNode = new hardware::media::omx::V1_0::utils::TWOmxNode(mNode);
-        mNode->setFrameSize(mWidth, mHeight);
+        Mutexed<sp<C2OMXNode>>::Locked node(mNode);
+        *node = new C2OMXNode(comp);
+        mOmxNode = new hardware::media::omx::V1_0::utils::TWOmxNode(*node);
+        (*node)->setFrameSize(mWidth, mHeight);
         // Usage is queried during configure(), so setting it beforehand.
         // 64 bit set parameter is existing only in C2OMXNode.
         OMX_U64 usage64 = mConfig.mUsage;
-        status_t res = mNode->setParameter(
+        status_t res = (*node)->setParameter(
                 (OMX_INDEXTYPE)OMX_IndexParamConsumerUsageBits64,
                 &usage64, sizeof(usage64));
 
         if (res != OK) {
             OMX_U32 usage = mConfig.mUsage & 0xFFFFFFFF;
-            (void)mNode->setParameter(
+            (void)(*node)->setParameter(
                     (OMX_INDEXTYPE)OMX_IndexParamConsumerUsageBits,
                     &usage, sizeof(usage));
         }
@@ -244,17 +248,18 @@ public:
     }
 
     void disconnect() override {
-        if (mNode == nullptr) {
+        Mutexed<sp<C2OMXNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
             return;
         }
-        sp<IOMXBufferSource> source = mNode->getSource();
+        sp<IOMXBufferSource> source = (*node)->getSource();
         if (source == nullptr) {
             ALOGD("GBSWrapper::disconnect: node is not configured with OMXBufferSource.");
             return;
         }
         source->onOmxIdle();
         source->onOmxLoaded();
-        mNode.clear();
+        node->clear();
         mOmxNode.clear();
     }
 
@@ -268,7 +273,11 @@ public:
     }
 
     status_t start() override {
-        sp<IOMXBufferSource> source = mNode->getSource();
+        Mutexed<sp<C2OMXNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
+            return NO_INIT;
+        }
+        sp<IOMXBufferSource> source = (*node)->getSource();
         if (source == nullptr) {
             return NO_INIT;
         }
@@ -278,7 +287,7 @@ public:
 
         OMX_PARAM_PORTDEFINITIONTYPE param;
         param.nPortIndex = kPortIndexInput;
-        status_t err = mNode->getParameter(OMX_IndexParamPortDefinition,
+        status_t err = (*node)->getParameter(OMX_IndexParamPortDefinition,
                                            &param, sizeof(param));
         if (err == OK) {
             numSlots = param.nBufferCountActual;
@@ -297,6 +306,7 @@ public:
     }
 
     status_t configure(Config &config) {
+        Mutexed<sp<C2OMXNode>>::Locked node(mNode);
         std::stringstream status;
         status_t err = OK;
 
@@ -317,7 +327,7 @@ public:
 
         // pts gap
         if (config.mMinAdjustedFps > 0 || config.mFixedAdjustedFps > 0) {
-            if (mNode != nullptr) {
+            if ((*node) != nullptr) {
                 OMX_PARAM_U32TYPE ptrGapParam = {};
                 ptrGapParam.nSize = sizeof(OMX_PARAM_U32TYPE);
                 float gap = (config.mMinAdjustedFps > 0)
@@ -326,7 +336,7 @@ public:
                 // float -> uint32_t is undefined if the value is negative.
                 // First convert to int32_t to ensure the expected behavior.
                 ptrGapParam.nU32 = int32_t(gap);
-                (void)mNode->setParameter(
+                (void)(*node)->setParameter(
                         (OMX_INDEXTYPE)OMX_IndexParamMaxFrameDurationForBitrateControl,
                         &ptrGapParam, sizeof(ptrGapParam));
             }
@@ -426,8 +436,8 @@ public:
 
         // priority
         if (mConfig.mPriority != config.mPriority) {
-            if (config.mPriority != INT_MAX) {
-                mNode->setPriority(config.mPriority);
+            if (config.mPriority != INT_MAX && (*node) != nullptr) {
+                (*node)->setPriority(config.mPriority);
             }
             mConfig.mPriority = config.mPriority;
         }
@@ -441,24 +451,40 @@ public:
     }
 
     void onInputBufferDone(c2_cntr64_t index) override {
-        mNode->onInputBufferDone(index);
+        Mutexed<sp<C2OMXNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
+            return;
+        }
+        (*node)->onInputBufferDone(index);
     }
 
     void onInputBufferEmptied() override {
-        mNode->onInputBufferEmptied();
+        Mutexed<sp<C2OMXNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
+            return;
+        }
+        (*node)->onInputBufferEmptied();
     }
 
     android_dataspace getDataspace() override {
-        return mNode->getDataspace();
+        Mutexed<sp<C2OMXNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
+            return HAL_DATASPACE_UNKNOWN;
+        }
+        return (*node)->getDataspace();
     }
 
     uint32_t getPixelFormat() override {
-        return mNode->getPixelFormat();
+        Mutexed<sp<C2OMXNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
+            return PIXEL_FORMAT_UNKNOWN;
+        }
+        return (*node)->getPixelFormat();
     }
 
 private:
     sp<HGraphicBufferSource> mSource;
-    sp<C2OMXNode> mNode;
+    Mutexed<sp<C2OMXNode>> mNode;
     sp<hardware::media::omx::V1_0::IOmxNode> mOmxNode;
     uint32_t mWidth;
     uint32_t mHeight;
@@ -479,33 +505,44 @@ public:
     ~AGraphicBufferSourceWrapper() override = default;
 
     status_t connect(const std::shared_ptr<Codec2Client::Component> &comp) override {
-        mNode = ::ndk::SharedRefBase::make<C2AidlNode>(comp);
-        mNode->setFrameSize(mWidth, mHeight);
+        Mutexed<std::shared_ptr<C2AidlNode>>::Locked node(mNode);
+        *node = ::ndk::SharedRefBase::make<C2AidlNode>(comp);
+        (*node)->setFrameSize(mWidth, mHeight);
         // Usage is queried during configure(), so setting it beforehand.
         uint64_t usage = mConfig.mUsage;
-        (void)mNode->setConsumerUsage((int64_t)usage);
+        (void)(*node)->setConsumerUsage((int64_t)usage);
 
+        // AIDL does not define legacy dataspace.
+        android_dataspace_t dataspace = mDataSpace;
+        if (android::media::codec::provider_->dataspace_v0_partial()) {
+            ColorUtils::convertDataSpaceToV0(dataspace);
+        }
         return fromAidlStatus(mSource->configure(
-                mNode, static_cast<::aidl::android::hardware::graphics::common::Dataspace>(
-                        mDataSpace)));
+                (*node), static_cast<::aidl::android::hardware::graphics::common::Dataspace>(
+                        dataspace)));
     }
 
     void disconnect() override {
-        if (mNode == nullptr) {
+        Mutexed<std::shared_ptr<C2AidlNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
             return;
         }
-        std::shared_ptr<IAidlBufferSource> source = mNode->getSource();
+        std::shared_ptr<IAidlBufferSource> source = (*node)->getSource();
         if (source == nullptr) {
             ALOGD("GBSWrapper::disconnect: node is not configured with OMXBufferSource.");
             return;
         }
         (void)source->onStop();
         (void)source->onRelease();
-        mNode.reset();
+        node->reset();
     }
 
     status_t start() override {
-        std::shared_ptr<IAidlBufferSource> source = mNode->getSource();
+        Mutexed<std::shared_ptr<C2AidlNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
+            return NO_INIT;
+        }
+        std::shared_ptr<IAidlBufferSource> source = (*node)->getSource();
         if (source == nullptr) {
             return NO_INIT;
         }
@@ -513,7 +550,7 @@ public:
         size_t numSlots = 16;
 
         IAidlNode::InputBufferParams param;
-        status_t err = fromAidlStatus(mNode->getInputBufferParams(&param));
+        status_t err = fromAidlStatus((*node)->getInputBufferParams(&param));
         if (err == OK) {
             numSlots = param.bufferCountActual;
         }
@@ -531,6 +568,7 @@ public:
     }
 
     status_t configure(Config &config) {
+        Mutexed<std::shared_ptr<C2AidlNode>>::Locked node(mNode);
         std::stringstream status;
         status_t err = OK;
 
@@ -551,14 +589,14 @@ public:
 
         // pts gap
         if (config.mMinAdjustedFps > 0 || config.mFixedAdjustedFps > 0) {
-            if (mNode != nullptr) {
+            if ((*node) != nullptr) {
                 float gap = (config.mMinAdjustedFps > 0)
                         ? c2_min(INT32_MAX + 0., 1e6 / config.mMinAdjustedFps + 0.5)
                         : c2_max(0. - INT32_MAX, -1e6 / config.mFixedAdjustedFps - 0.5);
                 // float -> uint32_t is undefined if the value is negative.
                 // First convert to int32_t to ensure the expected behavior.
                 int32_t gapUs = int32_t(gap);
-                (void)mNode->setAdjustTimestampGapUs(gapUs);
+                (void)(*node)->setAdjustTimestampGapUs(gapUs);
             }
         }
 
@@ -650,7 +688,7 @@ public:
         // priority
         if (mConfig.mPriority != config.mPriority) {
             if (config.mPriority != INT_MAX) {
-                mNode->setPriority(config.mPriority);
+                (*node)->setPriority(config.mPriority);
             }
             mConfig.mPriority = config.mPriority;
         }
@@ -664,24 +702,40 @@ public:
     }
 
     void onInputBufferDone(c2_cntr64_t index) override {
-        mNode->onInputBufferDone(index);
+        Mutexed<std::shared_ptr<C2AidlNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
+            return;
+        }
+        (*node)->onInputBufferDone(index);
     }
 
     void onInputBufferEmptied() override {
-        mNode->onInputBufferEmptied();
+        Mutexed<std::shared_ptr<C2AidlNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
+            return;
+        }
+        (*node)->onInputBufferEmptied();
     }
 
     android_dataspace getDataspace() override {
-        return mNode->getDataspace();
+        Mutexed<std::shared_ptr<C2AidlNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
+            return HAL_DATASPACE_UNKNOWN;
+        }
+        return (*node)->getDataspace();
     }
 
     uint32_t getPixelFormat() override {
-        return mNode->getPixelFormat();
+        Mutexed<std::shared_ptr<C2AidlNode>>::Locked node(mNode);
+        if ((*node) == nullptr) {
+            return PIXEL_FORMAT_UNKNOWN;
+        }
+        return (*node)->getPixelFormat();
     }
 
 private:
     std::shared_ptr<AGraphicBufferSource> mSource;
-    std::shared_ptr<C2AidlNode> mNode;
+    Mutexed<std::shared_ptr<C2AidlNode>> mNode;
     uint32_t mWidth;
     uint32_t mHeight;
     Config mConfig;
@@ -2605,18 +2659,31 @@ void CCodec::signalSetParameters(const sp<AMessage> &msg) {
             c2_status_t status = GetCodec2BlockPool(C2BlockPool::BASIC_LINEAR, nullptr, &pool);
 
             if (status == C2_OK) {
+                int width, height;
+                config->mInputFormat->findInt32("width", &width);
+                config->mInputFormat->findInt32("height", &height);
+                // The length of the qp-map corresponds to the number of 16x16 blocks in one frame
+                int expectedMapSize = ((width + 15) / 16) * ((height + 15) / 16);
                 size_t mapSize = qpOffsetMap->size();
-                std::shared_ptr<C2LinearBlock> block;
-                status = pool->fetchLinearBlock(mapSize,
-                        C2MemoryUsage{C2MemoryUsage::CPU_READ, C2MemoryUsage::CPU_WRITE}, &block);
-                if (status == C2_OK && !block->map().get().error()) {
-                    C2WriteView wView = block->map().get();
-                    uint8_t* outData = wView.data();
-                    memcpy(outData, qpOffsetMap->data(), mapSize);
-                    C2InfoBuffer info = C2InfoBuffer::CreateLinearBuffer(
-                            kParamIndexQpOffsetMapBuffer,
-                            block->share(0, mapSize, C2Fence()));
-                    mChannel->setInfoBuffer(std::make_shared<C2InfoBuffer>(info));
+                if (mapSize >= expectedMapSize) {
+                    std::shared_ptr<C2LinearBlock> block;
+                    status = pool->fetchLinearBlock(
+                            expectedMapSize,
+                            C2MemoryUsage{C2MemoryUsage::CPU_READ, C2MemoryUsage::CPU_WRITE},
+                            &block);
+                    if (status == C2_OK && !block->map().get().error()) {
+                        C2WriteView wView = block->map().get();
+                        uint8_t* outData = wView.data();
+                        memcpy(outData, qpOffsetMap->data(), expectedMapSize);
+                        C2InfoBuffer info = C2InfoBuffer::CreateLinearBuffer(
+                                kParamIndexQpOffsetMapBuffer,
+                                block->share(0, expectedMapSize, C2Fence()));
+                        mChannel->setInfoBuffer(std::make_shared<C2InfoBuffer>(info));
+                    }
+                } else {
+                    ALOGE("Ignoring param key %s as buffer size %zu is less than expected "
+                          "buffer size %d",
+                          PARAMETER_KEY_QP_OFFSET_MAP, mapSize, expectedMapSize);
                 }
             }
             params->removeEntryByName(PARAMETER_KEY_QP_OFFSET_MAP);

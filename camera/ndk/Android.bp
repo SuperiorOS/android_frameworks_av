@@ -79,6 +79,7 @@ cc_library_shared {
     shared_libs: [
         "android.companion.virtual.virtualdevice_aidl-cpp",
         "android.companion.virtualdevice.flags-aconfig-cc",
+        "framework-permission-aidl-cpp",
         "libandroid_runtime",
         "libbinder",
         "libcamera_client",

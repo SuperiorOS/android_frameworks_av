@@ -22,6 +22,7 @@ using ::android::sp;
 using ::android::MediaMetricsService;
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    signal(SIGPIPE, SIG_IGN);
     auto service = sp<MediaMetricsService>::make();
     fuzzService(service, FuzzedDataProvider(data, size));
     return 0;

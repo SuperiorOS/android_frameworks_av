@@ -26,6 +26,7 @@
 #include <device3/Camera3StreamInterface.h>
 #include <gui/bufferqueue/1.0/H2BGraphicBufferProducer.h>
 #include <mediautils/AImageReaderUtils.h>
+#include "utils/Utils.h"
 
 namespace android::hardware::cameraservice::utils::conversion::aidl {
 
@@ -347,8 +348,8 @@ status_t copySessionCharacteristics(const CameraMetadata& from, CameraMetadata* 
     // Ensure the vendor ID are the same before attempting
     // anything else. If vendor IDs differ we cannot safely copy the characteristics.
     if (from.getVendorId() != to->getVendorId()) {
-        ALOGE("%s: Incompatible CameraMetadata objects. Vendor IDs differ. From: %lu; To: %lu",
-              __FUNCTION__, from.getVendorId(), to->getVendorId());
+        ALOGE("%s: Incompatible CameraMetadata objects. Vendor IDs differ. From: %" PRIu64
+              "; To: %" PRIu64, __FUNCTION__, from.getVendorId(), to->getVendorId());
         return BAD_VALUE;
     }
 
@@ -364,7 +365,7 @@ status_t copySessionCharacteristics(const CameraMetadata& from, CameraMetadata* 
     for (size_t i = 0; i < get_camera_metadata_entry_count(src); i++) {
         int ret = get_camera_metadata_ro_entry(src, i, &entry);
         if (ret != OK) {
-            ALOGE("%s: Could not fetch entry at index %lu. Error: %d", __FUNCTION__, i, ret);
+            ALOGE("%s: Could not fetch entry at index %zu. Error: %d", __FUNCTION__, i, ret);
             from.unlock(src);
             return BAD_VALUE;
         }

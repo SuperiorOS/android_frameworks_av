@@ -94,7 +94,7 @@ std::string ResourceList::toString() const {
         str.append("\n");
     }
 
-    return std::move(str);
+    return str;
 }
 
 bool ResourceList::operator==(const ResourceList& rhs) const {

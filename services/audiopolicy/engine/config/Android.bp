@@ -10,6 +10,9 @@ package {
 
 cc_library {
     name: "libaudiopolicyengine_config",
+    defaults: [
+        "latest_android_media_audio_common_types_cpp_shared",
+    ],
     export_include_dirs: ["include"],
     include_dirs: [
         "external/libxml2/include",

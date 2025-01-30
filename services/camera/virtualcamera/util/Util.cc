@@ -89,12 +89,15 @@ PlanesLockGuard::PlanesLockGuard(std::shared_ptr<AHardwareBuffer> hwBuffer,
     return;
   }
 
-  const int32_t rawFence = fence != nullptr ? fence->get() : -1;
+  const int32_t rawFence = fence != nullptr ? dup(fence->get()) : -1;
   mLockStatus = static_cast<status_t>(AHardwareBuffer_lockPlanes(
       hwBuffer.get(), usageFlags, rawFence, nullptr, &mPlanes));
   if (mLockStatus != OK) {
     ALOGE("%s: Failed to lock graphic buffer: %s", __func__,
           statusToString(mLockStatus).c_str());
+  }
+  if (rawFence >= 0) {
+    close(rawFence);
   }
 }
 

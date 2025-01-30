@@ -62,6 +62,15 @@ constexpr audio_format_t kFormat = AUDIO_FORMAT_PCM_FLOAT;
 constexpr int kNPointFFT = 16384;
 constexpr float kBinWidth = (float)kSamplingFrequency / kNPointFFT;
 
+// frequency used to generate testing tone
+constexpr uint32_t kTestFrequency = 1400;
+
+// Tolerance of audio gain difference in dB, which is 10^(0.1/20) (around 1.0116%) difference in
+// amplitude
+constexpr float kAudioGainDiffTolerancedB = .1f;
+
+const std::string kDataTempPath = "/data/local/tmp";
+
 const char* gPackageName = "AudioEffectAnalyser";
 
 static_assert(kPrimeDurationInSec + 2 * kNPointFFT / kSamplingFrequency < kCaptureDurationSec,
@@ -177,21 +186,30 @@ sp<AudioEffect> createEffect(const effect_uuid_t* type,
     return effect;
 }
 
-void computeFilterGainsAtTones(float captureDuration, int nPointFft, std::vector<int>& binOffsets,
-                               float* inputMag, float* gaindB, const char* res,
-                               audio_session_t sessionId) {
+void computeFilterGainsAtTones(float captureDuration, int nPointFft, std::vector<int> binOffsets,
+                               float* inputMag, float* gaindB, const std::string res,
+                               audio_session_t sessionId, const std::string res2 = "",
+                               audio_session_t sessionId2 = AUDIO_SESSION_NONE) {
     int totalFrameCount = captureDuration * kSamplingFrequency;
     auto output = pffft::AlignedVector<float>(totalFrameCount);
     auto fftOutput = pffft::AlignedVector<float>(nPointFft);
-    PlaybackEnv argsP;
-    argsP.mRes = std::string{res};
+    PlaybackEnv argsP, argsP2;
+    argsP.mRes = res;
     argsP.mSessionId = sessionId;
     CaptureEnv argsR;
     argsR.mCaptureDuration = captureDuration;
     std::thread playbackThread(&PlaybackEnv::play, &argsP);
+    std::optional<std::thread> playbackThread2;
+    if (res2 != "") {
+        argsP2 = {.mSessionId = sessionId2, .mRes = res2};
+        playbackThread2 = std::thread(&PlaybackEnv::play, &argsP2);
+    }
     std::thread captureThread(&CaptureEnv::capture, &argsR);
     captureThread.join();
     playbackThread.join();
+    if (playbackThread2 != std::nullopt) {
+        playbackThread2->join();
+    }
     ASSERT_EQ(OK, argsR.mStatus) << argsR.mMsg;
     ASSERT_EQ(OK, argsP.mStatus) << argsP.mMsg;
     ASSERT_FALSE(argsR.mDumpFileName.empty()) << "recorded not written to file";
@@ -210,7 +228,11 @@ void computeFilterGainsAtTones(float captureDuration, int nPointFft, std::vector
         auto k = binOffsets[i];
         auto outputMag = sqrt((fftOutput[k * 2] * fftOutput[k * 2]) +
                               (fftOutput[k * 2 + 1] * fftOutput[k * 2 + 1]));
-        gaindB[i] = 20 * log10(outputMag / inputMag[i]);
+        if (inputMag == nullptr) {
+            gaindB[i] = 20 * log10(outputMag);
+        } else {
+            gaindB[i] = 20 * log10(outputMag / inputMag[i]);
+        }
     }
 }
 
@@ -282,7 +304,7 @@ TEST(AudioEffectTest, CheckEqualizerEffect) {
         inputMag[i] = sqrt((fftInput[k * 2] * fftInput[k * 2]) +
                            (fftInput[k * 2 + 1] * fftInput[k * 2 + 1]));
     }
-    TemporaryFile tf("/data/local/tmp");
+    TemporaryFile tf(kDataTempPath);
     close(tf.release());
     std::ofstream fout(tf.path, std::ios::out | std::ios::binary);
     fout.write((char*)input.data(), input.size() * sizeof(input[0]));
@@ -386,7 +408,7 @@ TEST(AudioEffectTest, CheckBassBoostEffect) {
         inputMag[i] = sqrt((fftInput[k * 2] * fftInput[k * 2]) +
                            (fftInput[k * 2 + 1] * fftInput[k * 2 + 1]));
     }
-    TemporaryFile tf("/data/local/tmp");
+    TemporaryFile tf(kDataTempPath);
     close(tf.release());
     std::ofstream fout(tf.path, std::ios::out | std::ios::binary);
     fout.write((char*)input.data(), input.size() * sizeof(input[0]));
@@ -396,7 +418,7 @@ TEST(AudioEffectTest, CheckBassBoostEffect) {
     memset(gainWithOutFilter, 0, sizeof(gainWithOutFilter));
     ASSERT_NO_FATAL_FAILURE(computeFilterGainsAtTones(kCaptureDurationSec, kNPointFFT, binOffsets,
                                                       inputMag, gainWithOutFilter, tf.path,
-                                                      AUDIO_SESSION_OUTPUT_MIX));
+                                                      AUDIO_SESSION_NONE));
     float diffA = gainWithOutFilter[0] - gainWithOutFilter[1];
     float prevGain = -100.f;
     for (auto strength = 150; strength < 1000; strength += strengthSupported ? 150 : 1000) {
@@ -419,6 +441,56 @@ TEST(AudioEffectTest, CheckBassBoostEffect) {
         EXPECT_GE(diffB, prevGain) << "increase in boost strength causing fall in gain";
         prevGain = diffB;
     }
+}
+
+// assert the silent audio session with effect does not override the output audio
+TEST(AudioEffectTest, SilentAudioEffectSessionNotOverrideOutput) {
+    audio_session_t sessionId =
+            (audio_session_t)AudioSystem::newAudioUniqueId(AUDIO_UNIQUE_ID_USE_SESSION);
+    sp<AudioEffect> bassboost = createEffect(SL_IID_BASSBOOST, sessionId);
+    if ((bassboost->descriptor().flags & EFFECT_FLAG_HW_ACC_MASK) != 0) {
+        GTEST_SKIP() << "effect processed output inaccessible, skipping test";
+    }
+    ASSERT_EQ(OK, bassboost->initCheck());
+    ASSERT_EQ(NO_ERROR, bassboost->setEnabled(true));
+
+    const auto bin = roundToFreqCenteredToFftBin(kBinWidth, kTestFrequency);
+    const int binIndex = std::get<0 /* index */>(bin);
+    const int binFrequency = std::get<1 /* freq */>(bin);
+
+    const int totalFrameCount = kSamplingFrequency * kPlayBackDurationSec;
+    // input for effect module
+    auto silentAudio = pffft::AlignedVector<float>(totalFrameCount);
+    auto input = pffft::AlignedVector<float>(totalFrameCount);
+    generateMultiTone({binFrequency}, kSamplingFrequency, kPlayBackDurationSec, kDefAmplitude,
+                      input.data(), totalFrameCount);
+    TemporaryFile tf(kDataTempPath);
+    close(tf.release());
+    std::ofstream fout(tf.path, std::ios::out | std::ios::binary);
+    fout.write((char*)input.data(), input.size() * sizeof(input[0]));
+    fout.close();
+
+    // play non-silent audio file on AUDIO_SESSION_NONE
+    float audioGain, audioPlusSilentEffectGain;
+    ASSERT_NO_FATAL_FAILURE(computeFilterGainsAtTones(kCaptureDurationSec, kNPointFFT, {binIndex},
+                                                      nullptr, &audioGain, tf.path,
+                                                      AUDIO_SESSION_NONE));
+    EXPECT_FALSE(std::isinf(audioGain)) << "output gain should not be -inf";
+
+    TemporaryFile silentFile(kDataTempPath);
+    close(silentFile.release());
+    std::ofstream fSilent(silentFile.path, std::ios::out | std::ios::binary);
+    fSilent.write((char*)silentAudio.data(), silentAudio.size() * sizeof(silentAudio[0]));
+    fSilent.close();
+    // play non-silent audio file on AUDIO_SESSION_NONE and silent audio on sessionId, expect
+    // the new output gain to be almost same as last playback
+    ASSERT_NO_FATAL_FAILURE(computeFilterGainsAtTones(
+            kCaptureDurationSec, kNPointFFT, {binIndex}, nullptr, &audioPlusSilentEffectGain,
+            tf.path, AUDIO_SESSION_NONE, silentFile.path, sessionId));
+    EXPECT_FALSE(std::isinf(audioPlusSilentEffectGain))
+            << "output might have been overwritten in effect accumulate mode";
+    EXPECT_NEAR(audioGain, audioPlusSilentEffectGain, kAudioGainDiffTolerancedB)
+            << " output gain should almost same with one more silent audio stream";
 }
 
 int main(int argc, char** argv) {

@@ -36,10 +36,10 @@ class VisualizerContext final : public EffectContext {
 
     RetCode initParams(const Parameter::Common& common);
 
-    RetCode enable();
-    RetCode disable();
+    RetCode enable() override;
+    RetCode disable() override;
     // keep all parameters and reset buffer.
-    void reset();
+    RetCode reset() override;
 
     RetCode setCaptureSamples(int32_t captureSize);
     int32_t getCaptureSamples();

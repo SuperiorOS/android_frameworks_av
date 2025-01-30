@@ -5,6 +5,7 @@ import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.os.Build;
 import java.util.ArrayList;
+import java.util.List;
 
 public class CodecUtils {
     private CodecUtils() {}
@@ -15,7 +16,7 @@ public class CodecUtils {
      * @param isEncoder Specifies encoder or decoder
      * @return ArrayList of codec names
      */
-    public static ArrayList<String> selectCodecs(String mimeType, boolean isEncoder) {
+    public static List<String> selectCodecs(String mimeType, boolean isEncoder) {
         MediaCodecList codecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
         MediaCodecInfo[] codecInfos = codecList.getCodecInfos();
         ArrayList<String> supportedCodecs = new ArrayList<>();

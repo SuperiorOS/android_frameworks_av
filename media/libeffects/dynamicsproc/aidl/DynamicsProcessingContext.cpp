@@ -48,10 +48,11 @@ RetCode DynamicsProcessingContext::disable() {
     return RetCode::SUCCESS;
 }
 
-void DynamicsProcessingContext::reset() {
+RetCode DynamicsProcessingContext::reset() {
     if (mDpFreq != nullptr) {
-        mDpFreq.reset();
+        mDpFreq->reset();
     }
+    return RetCode::SUCCESS;
 }
 
 RetCode DynamicsProcessingContext::setCommon(const Parameter::Common& common) {

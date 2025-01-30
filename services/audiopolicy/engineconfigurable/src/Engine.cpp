@@ -71,27 +71,75 @@ Engine::Engine() : mPolicyParameterMgr(new ParameterManagerWrapper())
 }
 
 status_t Engine::loadFromHalConfigWithFallback(
-        const media::audio::common::AudioHalEngineConfig& config __unused) {
-    // b/242678729. Need to implement for the configurable engine.
-    return INVALID_OPERATION;
-}
+        const media::audio::common::AudioHalEngineConfig& aidlConfig) {
 
-status_t Engine::loadFromXmlConfigWithFallback(const std::string& xmlFilePath)
-{
-    status_t loadResult = loadAudioPolicyEngineConfig(xmlFilePath);
-    if (loadResult < 0) {
-        ALOGE("Policy Engine configuration is invalid.");
+    auto capResult = capEngineConfig::convert(aidlConfig);
+    if (capResult.parsedConfig == nullptr) {
+        ALOGE("%s CapEngine Config invalid", __func__);
+        return BAD_VALUE;
     }
-    return loadResult;
-}
-
-status_t Engine::initCheck()
-{
+    status_t ret = loadWithFallback(aidlConfig);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    auto loadCriteria= [this](const auto& capCriteria) {
+        for (auto& capCriterion : capCriteria) {
+            mPolicyParameterMgr->addCriterion(capCriterion.criterion.name,
+                    capCriterion.criterionType.isInclusive,
+                    capCriterion.criterionType.valuePairs,
+                    capCriterion.criterion.defaultLiteralValue);
+        }
+    };
+    loadCriteria(capResult.parsedConfig->capCriteria);
     std::string error;
     if (mPolicyParameterMgr == nullptr || mPolicyParameterMgr->start(error) != NO_ERROR) {
         ALOGE("%s: could not start Policy PFW: %s", __FUNCTION__, error.c_str());
         return NO_INIT;
     }
+    return mPolicyParameterMgr->setConfiguration(capResult);
+}
+
+status_t Engine::loadFromXmlConfigWithFallback(const std::string& xmlFilePath)
+{
+    status_t status = loadWithFallback(xmlFilePath);
+    std::string error;
+    if (mPolicyParameterMgr == nullptr || mPolicyParameterMgr->start(error) != NO_ERROR) {
+        ALOGE("%s: could not start Policy PFW: %s", __FUNCTION__, error.c_str());
+        return NO_INIT;
+    }
+    return status;
+}
+
+template<typename T>
+status_t Engine::loadWithFallback(const T& configSource) {
+    auto result = EngineBase::loadAudioPolicyEngineConfig(configSource);
+    ALOGE_IF(result.nbSkippedElement != 0,
+             "Policy Engine configuration is partially invalid, skipped %zu elements",
+             result.nbSkippedElement);
+
+    auto loadCriteria= [this](const auto& configCriteria, const auto& configCriterionTypes) {
+        for (auto& criterion : configCriteria) {
+            engineConfig::CriterionType criterionType;
+            for (auto &configCriterionType : configCriterionTypes) {
+                if (configCriterionType.name == criterion.typeName) {
+                    criterionType = configCriterionType;
+                    break;
+                }
+            }
+            ALOG_ASSERT(not criterionType.name.empty(), "Invalid criterion type for %s",
+                        criterion.name.c_str());
+            mPolicyParameterMgr->addCriterion(criterion.name, criterionType.isInclusive,
+                                              criterionType.valuePairs,
+                                              criterion.defaultLiteralValue);
+        }
+    };
+
+    loadCriteria(result.parsedConfig->criteria, result.parsedConfig->criterionTypes);
+    return result.nbSkippedElement == 0? NO_ERROR : BAD_VALUE;
+}
+
+status_t Engine::initCheck()
+{
     return EngineBase::initCheck();
 }
 
@@ -197,32 +245,6 @@ status_t Engine::setDeviceConnectionState(const sp<DeviceDescriptor> device,
                     getApmObserver()->getAvailableInputDevices().types());
     }
     return EngineBase::setDeviceConnectionState(device, state);
-}
-
-status_t Engine::loadAudioPolicyEngineConfig(const std::string& xmlFilePath)
-{
-    auto result = EngineBase::loadAudioPolicyEngineConfig(xmlFilePath);
-
-    // Custom XML Parsing
-    auto loadCriteria= [this](const auto& configCriteria, const auto& configCriterionTypes) {
-        for (auto& criterion : configCriteria) {
-            engineConfig::CriterionType criterionType;
-            for (auto &configCriterionType : configCriterionTypes) {
-                if (configCriterionType.name == criterion.typeName) {
-                    criterionType = configCriterionType;
-                    break;
-                }
-            }
-            ALOG_ASSERT(not criterionType.name.empty(), "Invalid criterion type for %s",
-                        criterion.name.c_str());
-            mPolicyParameterMgr->addCriterion(criterion.name, criterionType.isInclusive,
-                                              criterionType.valuePairs,
-                                              criterion.defaultLiteralValue);
-        }
-    };
-
-    loadCriteria(result.parsedConfig->criteria, result.parsedConfig->criterionTypes);
-    return result.nbSkippedElement == 0? NO_ERROR : BAD_VALUE;
 }
 
 status_t Engine::setDevicesRoleForStrategy(product_strategy_t strategy, device_role_t role,

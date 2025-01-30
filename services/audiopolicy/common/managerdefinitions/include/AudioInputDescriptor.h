@@ -41,7 +41,8 @@ class AudioInputDescriptor: public AudioPortConfig,
 {
 public:
     AudioInputDescriptor(const sp<IOProfile>& profile,
-                         AudioPolicyClientInterface *clientInterface);
+                         AudioPolicyClientInterface *clientInterface,
+                         bool isPreemptor);
 
     virtual ~AudioInputDescriptor() = default;
 
@@ -127,6 +128,8 @@ public:
     // active use case
     void checkSuspendEffects();
 
+    bool isPreemptor() const { return mIsPreemptor; }
+
  private:
 
     void updateClientRecordingConfiguration(int event, const sp<RecordClientDescriptor>& client);
@@ -145,6 +148,7 @@ public:
     int32_t mGlobalActiveCount = 0;  // non-client-specific activity ref count
     EffectDescriptorCollection mEnabledEffects;
     audio_input_flags_t& mFlags = AudioPortConfig::mFlags.input;
+    bool mIsPreemptor; // true if this input was opened after preemting another one
 };
 
 class AudioInputCollection :

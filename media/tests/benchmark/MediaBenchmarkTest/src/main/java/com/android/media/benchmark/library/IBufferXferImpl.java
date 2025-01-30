@@ -16,9 +16,9 @@
 
 package com.android.media.benchmark.library;
 
-/**
+/*
  * Class that manages the buffer senders
-*/
+ */
 import com.android.media.benchmark.library.IBufferXfer;
 import java.util.ArrayDeque;
 import android.util.Log;

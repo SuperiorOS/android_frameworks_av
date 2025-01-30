@@ -236,7 +236,7 @@ private:
     // Start of members protected by mBatchLock
     std::deque<uint32_t> mInflightBatchSizes;
     std::vector<native_handle_t*> mInflightReturnedHandles;
-    std::vector<const sp<IMemory>> mInflightReturnedMemorys;
+    std::vector<sp<IMemory>> mInflightReturnedMemorys;
     // End of members protected by mBatchLock
 
     void releaseQueuedFrames();

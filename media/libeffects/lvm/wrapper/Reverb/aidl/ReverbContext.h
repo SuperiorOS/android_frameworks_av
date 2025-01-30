@@ -51,8 +51,8 @@ class ReverbContext final : public EffectContext {
     RetCode init();
     void deInit();
 
-    RetCode enable();
-    RetCode disable();
+    RetCode enable() override;
+    RetCode disable() override;
 
     bool isAuxiliary();
     bool isPreset();

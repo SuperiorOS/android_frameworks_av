@@ -23,6 +23,9 @@
 namespace android {
 namespace camera3 {
 
+// minimal jpeg buffer size: 256KB. Blob header is not included.
+constexpr const size_t MIN_JPEG_BUFFER_SIZE = 256 * 1024;
+
 enum DepthPhotoOrientation {
     DEPTH_ORIENTATION_0_DEGREES   = 0,
     DEPTH_ORIENTATION_90_DEGREES  = 90,

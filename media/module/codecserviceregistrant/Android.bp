@@ -55,6 +55,8 @@ cc_library {
         "com.android.media.swcodec",
     ],
 
+    export_include_dirs: ["include"],
+
     srcs: [
         "CodecServiceRegistrant.cpp",
     ],

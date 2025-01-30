@@ -20,12 +20,13 @@
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 //#define LOG_NDEBUG 0
 
+#include <camera/StringUtils.h>
+#include <com_android_graphics_libgui_flags.h>
 #include <gui/BufferItem.h>
+#include <gui/BufferQueue.h>
 #include <gui/IGraphicBufferConsumer.h>
 #include <gui/IGraphicBufferProducer.h>
-#include <gui/BufferQueue.h>
 #include <gui/Surface.h>
-#include <camera/StringUtils.h>
 
 #include <ui/GraphicBuffer.h>
 
@@ -81,18 +82,28 @@ status_t Camera3StreamSplitter::connect(const std::unordered_map<size_t, sp<Surf
         }
     }
 
+#if !COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
     // Create BufferQueue for input
     BufferQueue::createBufferQueue(&mProducer, &mConsumer);
+#endif  // !COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
 
     // Allocate 1 extra buffer to handle the case where all buffers are detached
     // from input, and attached to the outputs. In this case, the input queue's
     // dequeueBuffer can still allocate 1 extra buffer before being blocked by
     // the output's attachBuffer().
     mMaxConsumerBuffers++;
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+    mBufferItemConsumer = new BufferItemConsumer(consumerUsage, mMaxConsumerBuffers);
+#else
     mBufferItemConsumer = new BufferItemConsumer(mConsumer, consumerUsage, mMaxConsumerBuffers);
+#endif  // COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
     if (mBufferItemConsumer == nullptr) {
         return NO_MEMORY;
     }
+#if COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
+    mProducer = mBufferItemConsumer->getSurface()->getIGraphicBufferProducer();
+    mConsumer = mBufferItemConsumer->getIGraphicBufferConsumer();
+#endif  //  COM_ANDROID_GRAPHICS_LIBGUI_FLAGS(WB_CONSUMER_BASE_OWNS_BQ)
     mConsumer->setConsumerName(toString8(mConsumerName));
 
     *consumer = new Surface(mProducer);

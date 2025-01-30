@@ -24,6 +24,7 @@
 #include <android-base/macros.h>  // DISALLOW_COPY_AND_ASSIGN
 #include <datapath/TrackMetrics.h>
 #include <mediautils/BatteryNotifier.h>
+#include <psh_utils/AudioPowerManager.h>
 
 #include <atomic>    // avoid transitive dependency
 #include <list>      // avoid transitive dependency
@@ -240,17 +241,13 @@ public:
      * Called when a track moves to active state to record its contribution to battery usage.
      * Track state transitions should eventually be handled within the track class.
      */
-    void beginBatteryAttribution() final {
-        mBatteryStatsHolder.emplace(uid());
-    }
+    void beginBatteryAttribution() final;
 
     /**
      * Called when a track moves out of the active state to record its contribution
      * to battery usage.
      */
-    void endBatteryAttribution() final {
-        mBatteryStatsHolder.reset();
-    }
+    void endBatteryAttribution() final;
 
 protected:
     DISALLOW_COPY_AND_ASSIGN(TrackBase);
@@ -333,6 +330,9 @@ protected:
                                     // true for Track, false for RecordTrack,
                                     // this could be a track type if needed later
 
+    void deferRestartIfDisabled();
+    virtual void restartIfDisabled() {}
+
     const wp<IAfThreadBase> mThread;
     const alloc_type     mAllocType;
     /*const*/ sp<Client> mClient;   // see explanation at ~TrackBase() why not const
@@ -344,7 +344,7 @@ protected:
     size_t              mBufferSize; // size of mBuffer in bytes
     // we don't really need a lock for these
     MirroredVariable<track_state>  mState;
-    const audio_attributes_t mAttr;
+    audio_attributes_t  mAttr;
     const uint32_t      mSampleRate;    // initial sample rate only; for tracks which
                         // support dynamic rates, the current value is in control block
     const audio_format_t mFormat;
@@ -397,6 +397,7 @@ protected:
     std::atomic_flag    mChangeNotified = ATOMIC_FLAG_INIT;
     // RAII object for battery stats book-keeping
     std::optional<mediautils::BatteryStatsAudioHandle> mBatteryStatsHolder;
+    std::unique_ptr<media::psh_utils::Token> mTrackToken;
 };
 
 class PatchTrackBase : public PatchProxyBufferProvider, public virtual IAfPatchTrackBase

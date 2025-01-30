@@ -18,6 +18,7 @@
 #define ANDROID_SERVERS_CAMERA3_INPUT_STREAM_H
 
 #include <utils/RefBase.h>
+#include <gui/Flags.h>
 #include <gui/Surface.h>
 #include <gui/BufferItemConsumer.h>
 
@@ -50,7 +51,11 @@ class Camera3InputStream : public Camera3IOStreamBase,
   private:
 
     sp<BufferItemConsumer> mConsumer;
+#if WB_CAMERA3_AND_PROCESSORS_WITH_DEPENDENCIES
+    sp<Surface> mSurface;
+#else
     sp<IGraphicBufferProducer> mProducer;
+#endif
     Vector<BufferItem> mBuffersInFlight;
 
     static const std::string FAKE_ID;
@@ -75,8 +80,12 @@ class Camera3InputStream : public Camera3IOStreamBase,
     virtual status_t getInputBufferLocked(camera_stream_buffer *buffer, Size *size);
     virtual status_t returnInputBufferLocked(
             const camera_stream_buffer &buffer);
+#if WB_CAMERA3_AND_PROCESSORS_WITH_DEPENDENCIES
+    virtual status_t getInputSurfaceLocked(sp<Surface> *surface);
+#else
     virtual status_t getInputBufferProducerLocked(
             sp<IGraphicBufferProducer> *producer);
+#endif
     virtual status_t disconnectLocked();
 
     virtual status_t configureQueueLocked();

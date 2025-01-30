@@ -41,9 +41,9 @@ struct HapticGeneratorParam {
     int mHapticChannelCount;
     int mAudioChannelCount;
 
-    std::map<int, HapticGenerator::VibratorScale> mHapticScales;
+    std::map<int, HapticGenerator::HapticScale> mHapticScales;
     // max intensity will be used to scale haptic data.
-    HapticGenerator::VibratorScale mMaxVibratorScale;
+    HapticGenerator::HapticScale mMaxHapticScale;
 
     HapticGenerator::VibratorInformation mVibratorInfo;
 };
@@ -65,9 +65,9 @@ class HapticGeneratorContext final : public EffectContext {
   public:
     HapticGeneratorContext(int statusDepth, const Parameter::Common& common);
     ~HapticGeneratorContext();
-    RetCode enable();
-    RetCode disable();
-    void reset();
+    RetCode enable() override;
+    RetCode disable() override;
+    RetCode reset() override;
 
     RetCode setHgHapticScales(const std::vector<HapticGenerator::HapticScale>& hapticScales);
     std::vector<HapticGenerator::HapticScale> getHgHapticScales() const;
